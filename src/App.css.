@@ -1,0 +1,190 @@
+/* Reset et Police de base */
+:root {
+  --primary: #0ea5e9;       /* Bleu ciel moderne */
+  --primary-dark: #0284c7;  /* Bleu plus foncé */
+  --success: #10b981;       /* Vert médical */
+  --warning: #f59e0b;       /* Orange alerte */
+  --bg-color: #f1f5f9;      /* Gris très clair (fond) */
+  --card-bg: #ffffff;       /* Blanc pur */
+  --text-main: #1e293b;     /* Noir doux */
+  --text-muted: #64748b;    /* Gris texte */
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Conteneur principal centré */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* --- HEADER / NAVIGATION --- */
+.navbar {
+  background: var(--card-bg);
+  padding: 1rem 2rem;
+  border-radius: 16px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.logo h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--primary-dark);
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.logo span {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-left: 10px;
+}
+
+/* --- BOUTONS --- */
+.btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+}
+
+.btn-primary {
+  background-color: var(--primary);
+  color: white;
+  box-shadow: 0 4px 10px rgba(14, 165, 233, 0.3);
+}
+
+.btn-primary:hover { background-color: var(--primary-dark); transform: translateY(-1px); }
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--text-muted);
+  color: var(--text-muted);
+}
+.btn-outline:hover { background: #f8fafc; color: var(--text-main); }
+
+.btn-action { padding: 6px 14px; font-size: 0.8rem; }
+.btn-start { background-color: var(--primary); color: white; }
+.btn-finish { background-color: var(--success); color: white; }
+
+/* --- LOGIN FORM --- */
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 80vh;
+}
+
+.login-card {
+  background: white;
+  padding: 3rem;
+  border-radius: 20px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+}
+
+.login-input {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 15px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 1rem;
+  outline: none;
+  box-sizing: border-box; /* Important pour que le padding ne casse pas la largeur */
+}
+
+.login-input:focus { border-color: var(--primary); }
+
+/* --- STATS CARDS --- */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: white;
+  padding: 25px;
+  border-radius: 16px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  border-left: 5px solid transparent;
+  transition: transform 0.2s;
+}
+
+.stat-card:hover { transform: translateY(-3px); }
+
+.stat-card h3 { margin: 0 0 10px 0; font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;}
+.stat-card .value { font-size: 2.5rem; font-weight: 800; margin: 0; }
+
+.border-blue { border-color: var(--primary); }
+.border-orange { border-color: var(--warning); }
+.border-green { border-color: var(--success); }
+
+.text-blue { color: var(--primary); }
+.text-orange { color: var(--warning); }
+.text-green { color: var(--success); }
+
+/* --- TABLEAU --- */
+.table-container {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th {
+  background: #f8fafc;
+  text-align: left;
+  padding: 18px 24px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+td {
+  padding: 20px 24px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.95rem;
+}
+
+tr:last-child td { border-bottom: none; }
+tr:hover { background-color: #f8fafc; }
+
+/* Badges de statut */
+.badge {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.badge-attente { background: #e0f2fe; color: #0284c7; }
+.badge-cours { background: #ffedd5; color: #c2410c; }
+.badge-termine { background: #dcfce7; color: #15803d; }
+.badge-archive { background: #f1f5f9; color: #64748b; }
