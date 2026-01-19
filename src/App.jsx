@@ -7,16 +7,28 @@ function App() {
   const [stats, setStats] = useState(null)
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(false)
-  
   const [searchTerm, setSearchTerm] = useState('')
+  
+  // Gestion Modale
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [currentBilan, setCurrentBilan] = useState(null)
-
-  // NOUVEAU : État pour gérer la liste des paramètres (ex: [{nom: 'Hémoglobine', val: '12'}])
   const [parametres, setParametres] = useState([])
+  const [typeAnalyseInput, setTypeAnalyseInput] = useState('') // Pour stocker le choix "Autre"
 
+  // Login
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+
+  // Liste des analyses prédéfinies
+  const LISTE_ANALYSES = [
+    "FNS Completo", 
+    "PCR Covid-19", 
+    "Biochimie Sanguine", 
+    "Bilan Lipidique", 
+    "Sérologie Virale",
+    "Bilan Hormonal",
+    "Autre" // Déclencheur du champ libre
+  ]
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -38,77 +50,67 @@ function App() {
     setLoading(false)
   }
 
-  // --- LOGIQUE DES PARAMÈTRES DYNAMIQUES ---
+  // --- LOGIQUE PARAMETRES ---
+  const ajouterParametre = () => setParametres([...parametres, { nom: '', valeur: '' }])
+  const supprimerParametre = (i) => { const n = [...parametres]; n.splice(i, 1); setParametres(n); }
+  const modifierParametre = (i, champ, val) => { const n = [...parametres]; n[i][champ] = val; setParametres(n); }
 
-  const ajouterParametre = () => {
-    setParametres([...parametres, { nom: '', valeur: '' }])
-  }
-
-  const supprimerParametre = (index) => {
-    const nouveauxParams = [...parametres]
-    nouveauxParams.splice(index, 1)
-    setParametres(nouveauxParams)
-  }
-
-  const modifierParametre = (index, champ, texte) => {
-    const nouveauxParams = [...parametres]
-    nouveauxParams[index][champ] = texte
-    setParametres(nouveauxParams)
-  }
-
-  // --- OUVERTURE MODALE ---
-
+  // --- ACTIONS MODALES ---
   const openNewBilan = () => {
-    setCurrentBilan({ nom_patient: '', prenom_patient: '', age_patient: '', type_analyse: '', statut: 'en_attente' })
-    // On commence avec une liste vide ou des valeurs par défaut selon l'analyse
-    setParametres([{ nom: 'Observation', valeur: '' }]) 
+    setCurrentBilan({ nom_patient: '', prenom_patient: '', age_patient: '', type_analyse: 'FNS Completo', statut: 'en_attente' })
+    setTypeAnalyseInput('FNS Completo')
+    setParametres([{ nom: 'Observation', valeur: '' }])
     setIsModalOpen(true)
   }
 
   const openEditBilan = (bilan) => {
     setCurrentBilan(bilan)
     
-    // On essaie de transformer le texte de la base de données en tableau
+    // Gestion intelligente du type d'analyse (Est-ce que c'est dans la liste ou un truc perso ?)
+    if (LISTE_ANALYSES.includes(bilan.type_analyse)) {
+      setTypeAnalyseInput(bilan.type_analyse)
+    } else {
+      setTypeAnalyseInput("Autre")
+    }
+
     try {
       if (bilan.resultat_analyse && bilan.resultat_analyse.startsWith('[')) {
         setParametres(JSON.parse(bilan.resultat_analyse))
       } else if (bilan.resultat_analyse) {
-        // Si c'est du vieux texte simple, on le met dans une case par défaut
         setParametres([{ nom: 'Résultat Global', valeur: bilan.resultat_analyse }])
       } else {
         setParametres([])
       }
-    } catch (e) {
-      setParametres([])
-    }
+    } catch { setParametres([]) }
     
     setIsModalOpen(true)
   }
 
-  // --- SAUVEGARDE ---
-
   const handleSave = async (e) => {
     e.preventDefault()
-    setLoading(true)
-
-    // On transforme le tableau de paramètres en texte pour le stocker (JSON stringify)
-    const resultatFinal = JSON.stringify(parametres)
+    
+    // Si l'utilisateur a choisi "Autre", on prend ce qu'il a écrit dans le champ libre (nom_analyse_custom)
+    // Sinon on prend la valeur du select
+    let typeFinal = typeAnalyseInput
+    if (typeAnalyseInput === 'Autre') {
+      typeFinal = currentBilan.type_analyse_custom || 'Analyse Spéciale'
+    } else {
+      typeFinal = typeAnalyseInput
+    }
 
     const dataToSave = {
       nom_patient: currentBilan.nom_patient,
       prenom_patient: currentBilan.prenom_patient,
       age_patient: currentBilan.age_patient,
-      type_analyse: currentBilan.type_analyse,
+      type_analyse: typeFinal,
       statut: currentBilan.statut,
-      resultat_analyse: resultatFinal, // On sauvegarde le JSON ici
+      resultat_analyse: JSON.stringify(parametres),
       date_fin_analyse: currentBilan.statut === 'termine' ? new Date() : null
     }
 
-    if (currentBilan.id) {
-      await supabase.from('bilans').update(dataToSave).eq('id', currentBilan.id)
-    } else {
-      await supabase.from('bilans').insert([{ ...dataToSave, cree_par: user.id }])
-    }
+    if (currentBilan.id) await supabase.from('bilans').update(dataToSave).eq('id', currentBilan.id)
+    else await supabase.from('bilans').insert([{ ...dataToSave, cree_par: user.id }])
+    
     setIsModalOpen(false)
     fetchData()
   }
@@ -120,71 +122,41 @@ function App() {
     }
   }
 
+  const handlePrint = () => {
+    window.print()
+  }
+
   const handleLogin = async (e) => {
     e.preventDefault()
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) alert("Erreur connexion")
   }
 
-  const filteredBilans = bilans.filter(b => 
-    b.nom_patient.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    b.prenom_patient.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    b.id.includes(searchTerm)
-  )
-
-  // Helper pour afficher proprement les résultats dans le tableau principal
-  const RenderResultatTableau = ({ resultatBrut }) => {
-    try {
-      if (!resultatBrut) return null
-      if (resultatBrut.startsWith('[')) {
-        const params = JSON.parse(resultatBrut)
-        return (
-          <div style={{marginTop:'8px', fontSize:'0.8em', color: '#cbd5e1'}}>
-            {params.slice(0, 3).map((p, i) => (
-              <div key={i}>• <span style={{color:'var(--primary)'}}>{p.nom}:</span> {p.valeur}</div>
-            ))}
-            {params.length > 3 && <div>... (+{params.length - 3} autres)</div>}
-          </div>
-        )
-      } else {
-        return <div style={{marginTop:'8px', fontSize:'0.85em', color: '#cbd5e1'}}>{resultatBrut}</div>
-      }
-    } catch { return null }
-  }
+  const filteredBilans = bilans.filter(b => b.nom_patient.toLowerCase().includes(searchTerm.toLowerCase()) || b.id.includes(searchTerm))
 
   // --- RENDU ---
-  
   const Background = () => (
     <div className="bio-background">
-      <ul className="bacteria-list">
-        {[...Array(10)].map((_, i) => <li key={i} className="bacteria"></li>)}
-      </ul>
+      <ul className="bacteria-list">{[...Array(10)].map((_, i) => <li key={i} className="bacteria"></li>)}</ul>
     </div>
   )
 
-  if (!user) {
-    return (
-      <>
-        <Background />
-        <div className="login-container">
-          <div className="login-card">
-            <h1 style={{fontSize: '3rem', marginBottom: '10px'}}>🧬</h1>
-            <h2 style={{color: 'white', marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '3px'}}>Pasteur<span style={{color: 'var(--primary)'}}>Lab</span></h2>
-            <p style={{color: '#94a3b8', marginBottom: '30px', fontSize: '0.9rem'}}>Secure LIMS Access</p>
-            <form onSubmit={handleLogin}>
-              <div style={{marginBottom: '15px'}}>
-                <input className="search-input" style={{borderRadius: '12px', textAlign: 'center'}} type="email" placeholder="Identifiant" value={email} onChange={e=>setEmail(e.target.value)} />
-              </div>
-              <div style={{marginBottom: '20px'}}>
-                <input className="search-input" style={{borderRadius: '12px', textAlign: 'center'}} type="password" placeholder="Mot de passe" value={password} onChange={e=>setPassword(e.target.value)} />
-              </div>
-              <button className="btn btn-primary" style={{width:'100%', padding: '15px'}}>Initialiser Connexion</button>
-            </form>
-          </div>
+  if (!user) return (
+    <>
+      <Background />
+      <div className="login-container">
+        <div className="login-card">
+          <h1 style={{fontSize: '3rem', marginBottom: '10px'}}>🧬</h1>
+          <h2>Pasteur<span style={{color: 'var(--primary)'}}>Lab</span></h2>
+          <form onSubmit={handleLogin}>
+            <input className="search-input" style={{marginBottom: '15px', textAlign: 'center'}} type="email" placeholder="Identifiant" value={email} onChange={e=>setEmail(e.target.value)} />
+            <input className="search-input" style={{marginBottom: '20px', textAlign: 'center'}} type="password" placeholder="Mot de passe" value={password} onChange={e=>setPassword(e.target.value)} />
+            <button className="btn btn-primary" style={{width:'100%'}}>Connexion</button>
+          </form>
         </div>
-      </>
-    )
-  }
+      </div>
+    </>
+  )
 
   return (
     <>
@@ -192,10 +164,7 @@ function App() {
       <div className="container">
         <nav className="navbar">
           <div className="logo"><h1>Pasteur<span>Algérie</span></h1></div>
-          <div style={{display:'flex', gap:'15px', alignItems: 'center'}}>
-            <span style={{fontSize: '0.8rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1px'}}>Système Connecté</span>
-            <button className="btn btn-edit" onClick={() => supabase.auth.signOut()}>Déconnexion</button>
-          </div>
+          <button className="btn btn-edit" onClick={() => supabase.auth.signOut()}>Déconnexion</button>
         </nav>
 
         {stats && (
@@ -213,30 +182,16 @@ function App() {
 
         <div className="table-container">
           <table>
-            <thead>
-              <tr>
-                <th>Patient</th>
-                <th>Analyse</th>
-                <th>Résultat / Statut</th>
-                <th style={{textAlign: 'right'}}>Actions</th>
-              </tr>
-            </thead>
+            <thead><tr><th>Patient</th><th>Analyse</th><th>Statut</th><th style={{textAlign: 'right'}}>Actions</th></tr></thead>
             <tbody>
               {filteredBilans.map((b) => (
                 <tr key={b.id}>
-                  <td>
-                    <strong style={{color: 'white', fontSize: '1rem'}}>{b.nom_patient} {b.prenom_patient}</strong>
-                    <div style={{fontSize:'0.8em', color:'#64748b', marginTop: '5px'}}>ID: {b.id.slice(0,8)} • {b.age_patient} ans</div>
-                  </td>
+                  <td><strong>{b.nom_patient} {b.prenom_patient}</strong><div style={{fontSize:'0.8em', color:'#64748b'}}>{b.age_patient} ans</div></td>
                   <td style={{color: 'var(--primary)', fontWeight: '600'}}>{b.type_analyse}</td>
-                  <td>
-                    <span className={`badge badge-${b.statut}`}>{b.statut.replace('_', ' ')}</span>
-                    {/* Affichage intelligent des résultats */}
-                    <RenderResultatTableau resultatBrut={b.resultat_analyse} />
-                  </td>
+                  <td><span className={`badge badge-${b.statut}`}>{b.statut.replace('_', ' ')}</span></td>
                   <td style={{textAlign: 'right'}}>
-                    <button className="btn btn-action btn-edit" style={{marginRight: '8px'}} onClick={() => openEditBilan(b)}>Éditer</button>
-                    <button className="btn btn-action btn-danger" onClick={() => handleDelete(b.id)}>Suppr.</button>
+                    <button className="btn btn-action btn-edit" onClick={() => openEditBilan(b)}>Ouvrir</button>
+                    <button className="btn btn-action btn-danger" style={{marginLeft: '5px'}} onClick={() => handleDelete(b.id)}>🗑️</button>
                   </td>
                 </tr>
               ))}
@@ -245,93 +200,98 @@ function App() {
         </div>
 
         {isModalOpen && (
-          <div className="modal-overlay" style={{
+          <div className="modal-overlay" onClick={() => setIsModalOpen(false)} style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
             background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100
-          }} onClick={() => setIsModalOpen(false)}>
-            <div className="modal" style={{padding: '30px', borderRadius: '20px', width: '90%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto'}} onClick={e => e.stopPropagation()}>
-              <h2 style={{marginTop:0, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '2px', fontSize: '1.2rem'}}>
-                {currentBilan.id ? 'Mise à jour Dossier' : 'Création Dossier'}
-              </h2>
+          }}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{padding: '30px', borderRadius: '20px', width: '90%', maxWidth: '700px', maxHeight: '90vh', overflowY: 'auto', background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', color: 'white'}}>
               
-              <form onSubmit={handleSave} style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
-                {/* --- INFOS PATIENT --- */}
-                <div style={{display:'flex', gap:'10px'}}>
-                  <div style={{flex:1}}>
-                    <label style={{color: '#94a3b8', fontSize: '0.8rem', marginBottom: '5px', display: 'block'}}>Nom</label>
-                    <input className="form-input" style={{width: '100%', boxSizing: 'border-box'}} required value={currentBilan.nom_patient} onChange={e => setCurrentBilan({...currentBilan, nom_patient: e.target.value})} />
+              {/* EN-TÊTE IMPRESSION CACHÉ À L'ÉCRAN */}
+              <div className="print-header">
+                <h1>INSTITUT PASTEUR D'ALGÉRIE</h1>
+                <p>Annexe Dely Ibrahim - Laboratoire d'Analyses Médicales</p>
+                <hr style={{borderColor: '#000'}}/>
+              </div>
+
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: '20px'}}>
+                <h2 style={{margin:0, color: 'var(--primary)'}}>DOSSIER MÉDICAL</h2>
+                <div className="no-print">
+                   <button type="button" onClick={handlePrint} className="btn btn-edit" style={{marginRight: '10px'}}>🖨️ Imprimer / PDF</button>
+                   <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-danger">X</button>
+                </div>
+              </div>
+              
+              <form onSubmit={handleSave} style={{display: 'flex', flexDirection: 'column', gap: '20px'}}>
+                
+                {/* 1. INFOS PATIENT & TYPE */}
+                <div style={{background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '10px'}}>
+                  <h3 style={{margin:'0 0 10px 0', fontSize:'0.9rem', color: '#94a3b8', textTransform:'uppercase'}}>Information Patient & Examen</h3>
+                  <div style={{display:'flex', gap:'10px', marginBottom: '15px'}}>
+                    <div style={{flex:1}}><label>Nom</label><input className="form-input" required value={currentBilan.nom_patient} onChange={e => setCurrentBilan({...currentBilan, nom_patient: e.target.value})} /></div>
+                    <div style={{flex:1}}><label>Prénom</label><input className="form-input" required value={currentBilan.prenom_patient} onChange={e => setCurrentBilan({...currentBilan, prenom_patient: e.target.value})} /></div>
+                    <div style={{width:'80px'}}><label>Age</label><input className="form-input" value={currentBilan.age_patient || ''} onChange={e => setCurrentBilan({...currentBilan, age_patient: e.target.value})} /></div>
                   </div>
-                  <div style={{flex:1}}>
-                    <label style={{color: '#94a3b8', fontSize: '0.8rem', marginBottom: '5px', display: 'block'}}>Prénom</label>
-                    <input className="form-input" style={{width: '100%', boxSizing: 'border-box'}} required value={currentBilan.prenom_patient} onChange={e => setCurrentBilan({...currentBilan, prenom_patient: e.target.value})} />
+
+                  {/* MENU ROULANT AVEC OPTION "AUTRE" */}
+                  <div>
+                    <label>Type d'analyse demandée</label>
+                    <select className="form-input" value={typeAnalyseInput} onChange={e => setTypeAnalyseInput(e.target.value)}>
+                      {LISTE_ANALYSES.map(type => <option key={type} value={type}>{type}</option>)}
+                    </select>
+                    
+                    {/* Si "Autre" est choisi, afficher ce champ pour écrire manuellement */}
+                    {typeAnalyseInput === 'Autre' && (
+                      <input 
+                        className="form-input" 
+                        style={{marginTop: '10px', borderColor: 'var(--primary)'}} 
+                        placeholder="Précisez le nom de l'analyse..."
+                        value={currentBilan.type_analyse_custom || ''}
+                        onChange={e => setCurrentBilan({...currentBilan, type_analyse_custom: e.target.value})}
+                      />
+                    )}
                   </div>
                 </div>
 
-                <div style={{display:'flex', gap:'10px'}}>
-                   <div style={{flex:1}}>
-                    <label style={{color: '#94a3b8', fontSize: '0.8rem', marginBottom: '5px', display: 'block'}}>Type d'analyse</label>
-                    <select className="form-input" style={{width: '100%', boxSizing: 'border-box'}} value={currentBilan.type_analyse} onChange={e => setCurrentBilan({...currentBilan, type_analyse: e.target.value})}>
-                      <option value="">-- Sélectionner --</option>
-                      <option value="FNS Completo">FNS Completo</option>
-                      <option value="PCR Covid-19">PCR Covid-19</option>
-                      <option value="Biochimie">Biochimie</option>
-                      <option value="Sérologie">Sérologie</option>
-                    </select>
-                  </div>
-                  <div style={{flex:1}}>
-                    <label style={{color: '#94a3b8', fontSize: '0.8rem', marginBottom: '5px', display: 'block'}}>Statut</label>
-                    <select className="form-input" style={{width: '100%', boxSizing: 'border-box'}} value={currentBilan.statut} onChange={e => setCurrentBilan({...currentBilan, statut: e.target.value})}>
-                      <option value="en_attente">En Attente</option>
-                      <option value="en_cours">En Cours</option>
-                      <option value="termine">Terminé</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* --- ZONE PARAMETRES DYNAMIQUES --- */}
-                <div style={{background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '10px', marginTop: '10px'}}>
-                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
-                    <label style={{color: '#94a3b8', fontSize: '0.9rem', display: 'block'}}>Paramètres biologiques & Résultats</label>
-                    <button type="button" onClick={ajouterParametre} style={{background: 'var(--primary)', border: 'none', borderRadius: '50%', width: '25px', height: '25px', cursor: 'pointer', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>+</button>
+                {/* 2. RESULTATS (TABLEAU DYNAMIQUE) */}
+                <div style={{background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '10px'}}>
+                   <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
+                    <h3 style={{margin:0, fontSize:'0.9rem', color: '#94a3b8', textTransform:'uppercase'}}>Résultats Techniques</h3>
+                    <button type="button" className="no-print" onClick={ajouterParametre} style={{background: 'var(--primary)', border: 'none', borderRadius: '50%', width: '25px', height: '25px', cursor: 'pointer'}}>+</button>
                   </div>
 
                   {parametres.map((param, index) => (
-                    <div key={index} style={{display: 'flex', gap: '10px', marginBottom: '10px'}}>
-                      <input 
-                        className="form-input" 
-                        placeholder="Paramètre (ex: Fer)" 
-                        style={{flex: 1}}
-                        value={param.nom} 
-                        onChange={(e) => modifierParametre(index, 'nom', e.target.value)}
-                      />
-                      <input 
-                        className="form-input" 
-                        placeholder="Valeur (ex: 80 µg/dL)" 
-                        style={{flex: 1}}
-                        value={param.valeur} 
-                        onChange={(e) => modifierParametre(index, 'valeur', e.target.value)}
-                      />
-                      <button 
-                        type="button" 
-                        onClick={() => supprimerParametre(index)}
-                        style={{background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '5px', cursor: 'pointer', padding: '0 10px'}}
-                      >✕</button>
+                    <div key={index} style={{display: 'flex', gap: '10px', marginBottom: '10px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '5px'}}>
+                      <input className="form-input" style={{flex: 1, border:'none', background:'transparent'}} placeholder="Paramètre (ex: Fer)" value={param.nom} onChange={(e) => modifierParametre(index, 'nom', e.target.value)}/>
+                      <input className="form-input" style={{flex: 1, border:'none', background:'transparent', textAlign:'right', fontWeight:'bold'}} placeholder="Valeur" value={param.valeur} onChange={(e) => modifierParametre(index, 'valeur', e.target.value)}/>
+                      <button type="button" className="no-print" onClick={() => supprimerParametre(index)} style={{background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer'}}>✕</button>
                     </div>
                   ))}
-                  
-                  {parametres.length === 0 && (
-                    <div style={{textAlign: 'center', color: '#64748b', fontSize: '0.8rem', padding: '10px'}}>
-                      Aucun paramètre. Cliquez sur + pour ajouter un résultat.
-                    </div>
-                  )}
+                  {parametres.length === 0 && <p style={{fontSize:'0.8rem', color:'#64748b'}}>Aucun résultat saisi.</p>}
                 </div>
 
-                <div style={{display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px'}}>
-                  <button type="button" className="btn btn-edit" onClick={() => setIsModalOpen(false)}>Annuler</button>
-                  <button type="submit" className="btn btn-primary">Sauvegarder</button>
+                {/* 3. STATUT ET VALIDATION */}
+                <div style={{background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '10px'}}>
+                  <h3 style={{margin:'0 0 10px 0', fontSize:'0.9rem', color: '#94a3b8', textTransform:'uppercase'}}>Conclusion</h3>
+                  <label>Statut du dossier</label>
+                  <select className="form-input" value={currentBilan.statut} onChange={e => setCurrentBilan({...currentBilan, statut: e.target.value})}>
+                    <option value="en_attente">En Attente de prélèvement</option>
+                    <option value="en_cours">Analyse en cours</option>
+                    <option value="termine">Terminé & Validé</option>
+                  </select>
+                </div>
+
+                <div className="no-print" style={{display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px'}}>
+                  <button type="button" className="btn btn-edit" onClick={() => setIsModalOpen(false)}>Fermer</button>
+                  <button type="submit" className="btn btn-primary">Enregistrer Modifications</button>
                 </div>
               </form>
+
+              {/* PIED DE PAGE IMPRESSION */}
+              <div className="print-footer">
+                <p>Document généré électroniquement par PasteurLab - {new Date().toLocaleDateString()}</p>
+              </div>
+
             </div>
           </div>
         )}
