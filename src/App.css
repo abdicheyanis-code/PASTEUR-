@@ -4,8 +4,8 @@
   --glass-bg: rgba(255, 255, 255, 0.05);
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-  --primary: #00f2ff; /* Cyan Néon */
-  --secondary: #4f46e5; /* Indigo */
+  --primary: #00f2ff;
+  --secondary: #4f46e5;
   --text: #e2e8f0;
   --text-muted: #94a3b8;
 }
@@ -13,219 +13,98 @@
 body {
   margin: 0;
   font-family: 'Outfit', sans-serif;
-  background: #0f172a; /* Fond sombre profond */
+  background: #0f172a;
   color: var(--text);
   overflow-x: hidden;
 }
 
-/* --- LE FOND ANIMÉ (BACTÉRIES FLOTTANTES) --- */
-.bio-background {
-  position: fixed;
-  top: 0; left: 0; width: 100%; height: 100%;
-  overflow: hidden;
-  z-index: -1;
-  background: radial-gradient(circle at bottom, #1e293b 0%, #0f172a 100%);
-}
-
-.bacteria {
-  position: absolute;
-  display: block;
-  list-style: none;
-  width: 20px; height: 20px;
-  background: rgba(0, 242, 255, 0.15);
-  border-radius: 50%; /* Forme ronde de base */
-  bottom: -150px;
-  animation: floatUp 25s infinite linear;
-  box-shadow: 0 0 10px rgba(0, 242, 255, 0.3);
-  filter: blur(2px);
-}
-
-/* On donne des formes organiques bizarres aux bactéries */
+/* FOND BACTERIES (Reste inchangé) */
+.bio-background { position: fixed; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; z-index: -1; background: radial-gradient(circle at bottom, #1e293b 0%, #0f172a 100%); }
+.bacteria { position: absolute; display: block; list-style: none; width: 20px; height: 20px; background: rgba(0, 242, 255, 0.15); border-radius: 50%; bottom: -150px; animation: floatUp 25s infinite linear; box-shadow: 0 0 10px rgba(0, 242, 255, 0.3); filter: blur(2px); }
 .bacteria:nth-child(even) { border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%; }
 .bacteria:nth-child(odd) { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
-
 .bacteria:nth-child(1) { left: 25%; width: 80px; height: 80px; animation-delay: 0s; }
 .bacteria:nth-child(2) { left: 10%; width: 20px; height: 20px; animation-delay: 2s; animation-duration: 12s; }
 .bacteria:nth-child(3) { left: 70%; width: 20px; height: 20px; animation-delay: 4s; }
 .bacteria:nth-child(4) { left: 40%; width: 60px; height: 60px; animation-delay: 0s; animation-duration: 18s; background: rgba(79, 70, 229, 0.2); }
 .bacteria:nth-child(5) { left: 65%; width: 20px; height: 20px; animation-delay: 0s; }
-.bacteria:nth-child(6) { left: 75%; width: 110px; height: 110px; animation-delay: 3s; background: rgba(79, 70, 229, 0.15);}
-.bacteria:nth-child(7) { left: 35%; width: 150px; height: 150px; animation-delay: 7s; }
-.bacteria:nth-child(8) { left: 50%; width: 25px; height: 25px; animation-delay: 15s; animation-duration: 45s; }
-.bacteria:nth-child(9) { left: 20%; width: 15px; height: 15px; animation-delay: 2s; animation-duration: 35s; }
-.bacteria:nth-child(10) { left: 85%; width: 150px; height: 150px; animation-delay: 0s; animation-duration: 11s; }
+@keyframes floatUp { 0% { transform: translateY(0) rotate(0deg); opacity: 1; } 100% { transform: translateY(-1000px) rotate(720deg); opacity: 0; } }
 
-@keyframes floatUp {
-  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
-  100% { transform: translateY(-1000px) rotate(720deg); opacity: 0; }
-}
+/* INTERFACE */
+.container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; position: relative; z-index: 10; }
+.navbar { background: var(--glass-bg); backdrop-filter: blur(12px); border: 1px solid var(--glass-border); padding: 1rem 2rem; border-radius: 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 3rem; }
+.logo h1 { margin: 0; font-size: 1.8rem; background: linear-gradient(90deg, #fff, #00f2ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; }
 
-/* --- INTERFACE GLASSMORPHISM --- */
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 40px 20px;
-  position: relative;
-  z-index: 10;
-}
-
-/* Header */
-.navbar {
-  background: var(--glass-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--glass-border);
-  padding: 1rem 2rem;
-  border-radius: 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 3rem;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-}
-
-.logo h1 {
-  margin: 0;
-  font-size: 1.8rem;
-  background: linear-gradient(90deg, #fff, #00f2ff);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-}
-
-/* --- STATS GLOWING CARDS --- */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 25px;
-  margin-bottom: 3rem;
-}
-
-.stat-card {
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid var(--glass-border);
-  padding: 30px;
-  border-radius: 20px;
-  position: relative;
-  overflow: hidden;
-  transition: all 0.3s ease;
-}
-
-.stat-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; width: 100%; height: 5px;
-  background: var(--color-glow);
-  box-shadow: 0 0 20px var(--color-glow);
-}
-
-.stat-card:hover {
-  transform: translateY(-10px) scale(1.02);
-  box-shadow: 0 10px 40px -10px rgba(0,0,0,0.5);
-  background: rgba(30, 41, 59, 0.8);
-}
-
+/* STATS */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 25px; margin-bottom: 3rem; }
+.stat-card { background: rgba(15, 23, 42, 0.6); border: 1px solid var(--glass-border); padding: 30px; border-radius: 20px; position: relative; overflow: hidden; transition: all 0.3s ease; }
+.stat-card::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 5px; background: var(--color-glow); box-shadow: 0 0 20px var(--color-glow); }
 .stat-card h3 { color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 2px; margin-top: 10px; }
-.stat-card .value { font-size: 3.5rem; font-weight: 700; margin: 0; color: white; text-shadow: 0 0 20px rgba(255,255,255,0.1); }
+.stat-card .value { font-size: 3.5rem; font-weight: 700; margin: 0; color: white; }
 
-/* --- TABLEAU FUTURISTE --- */
-.table-container {
-  background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  border: 1px solid var(--glass-border);
-  border-radius: 24px;
-  padding: 5px;
-  overflow: hidden;
-  box-shadow: var(--glass-shadow);
-}
-
+/* TABLEAU */
+.table-container { background: var(--glass-bg); backdrop-filter: blur(16px); border: 1px solid var(--glass-border); border-radius: 24px; padding: 5px; overflow: hidden; }
 table { width: 100%; border-collapse: separate; border-spacing: 0; }
 th { color: var(--primary); padding: 20px; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 1.5px; border-bottom: 1px solid rgba(255,255,255,0.05); text-align: left;}
-td { padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.02); color: #cbd5e1; transition: 0.2s;}
+td { padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.02); color: #cbd5e1; }
 tr:hover td { background: rgba(255,255,255,0.03); color: white; }
 
-/* --- BOUTONS REACTIFS --- */
-.btn {
-  padding: 12px 24px;
-  border-radius: 12px;
-  border: none;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  text-transform: uppercase;
-  font-size: 0.8rem;
-  letter-spacing: 1px;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, var(--secondary), #00f2ff);
-  color: white;
-  box-shadow: 0 4px 15px rgba(0, 242, 255, 0.3);
-}
-
-.btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 242, 255, 0.5);
-  filter: brightness(1.2);
-}
-
+/* BOUTONS & INPUTS */
+.btn { padding: 12px 24px; border-radius: 12px; border: none; font-weight: 600; cursor: pointer; transition: all 0.3s; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px; }
+.btn-primary { background: linear-gradient(135deg, var(--secondary), #00f2ff); color: white; box-shadow: 0 4px 15px rgba(0, 242, 255, 0.3); }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0, 242, 255, 0.5); }
 .btn-action { padding: 8px 16px; font-size: 0.7rem; border-radius: 8px; }
 .btn-edit { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); }
-.btn-edit:hover { background: white; color: black; box-shadow: 0 0 15px white; }
-
 .btn-danger { background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); }
-.btn-danger:hover { background: #ef4444; color: white; box-shadow: 0 0 15px #ef4444; }
+.search-input { background: rgba(15, 23, 42, 0.6); border: 1px solid var(--glass-border); color: white; padding: 15px 25px; border-radius: 50px; width: 100%; outline: none; }
+.search-input:focus { border-color: var(--primary); box-shadow: 0 0 20px rgba(0, 242, 255, 0.2); }
 
-/* --- INPUTS & MODALS --- */
-.search-input {
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid var(--glass-border);
-  color: white;
-  padding: 15px 25px;
-  border-radius: 50px;
-  width: 100%;
-  transition: 0.3s;
-}
-.search-input:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 20px rgba(0, 242, 255, 0.2);
-  background: rgba(15, 23, 42, 0.9);
-}
-
-.modal {
-  background: #1e293b;
-  border: 1px solid var(--glass-border);
-  color: white;
-  box-shadow: 0 0 50px rgba(0,0,0,0.8);
-}
-.form-input, .form-textarea, select {
-  background: #0f172a;
-  border: 1px solid #334155;
-  color: white;
-  padding: 12px;
-  border-radius: 8px;
-}
+/* MODAL & FORM */
+.form-input, .form-textarea, select { background: #0f172a; border: 1px solid #334155; color: white; padding: 12px; border-radius: 8px; width: 100%; box-sizing: border-box; }
 .form-input:focus { border-color: var(--primary); outline: none; }
+.badge { padding: 5px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 800; }
+.badge-en_attente { background: rgba(56, 189, 248, 0.1); color: #38bdf8; }
+.badge-en_cours { background: rgba(251, 146, 60, 0.1); color: #fb923c; }
+.badge-termine { background: rgba(74, 222, 128, 0.1); color: #4ade80; }
 
-/* Login Page Specifique */
-.login-container { min-height: 100vh; display: flex; align-items: center; justify-content: center; position: relative; z-index: 10;}
-.login-card { 
-  background: rgba(15, 23, 42, 0.7); 
-  backdrop-filter: blur(20px); 
-  padding: 3rem; 
-  border-radius: 24px; 
-  border: 1px solid var(--glass-border); 
-  text-align: center;
-  box-shadow: 0 0 40px rgba(0, 242, 255, 0.1);
-  width: 100%;
-  max-width: 400px;
+.login-container { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+.login-card { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(20px); padding: 3rem; border-radius: 24px; border: 1px solid var(--glass-border); text-align: center; width: 100%; max-width: 400px; }
+
+/* --- IMPRESSION (PRINT STYLE) --- */
+@media print {
+  body * { visibility: hidden; } /* Cache tout le site */
+  .bio-background { display: none; }
+  
+  /* On affiche seulement la fenêtre modale */
+  .modal-overlay, .modal-overlay * { visibility: visible; }
+  
+  .modal-overlay {
+    position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+    background: white; color: black; z-index: 9999;
+    align-items: flex-start; padding-top: 20px;
+  }
+  
+  .modal {
+    background: white !important; color: black !important;
+    border: none !important; box-shadow: none !important;
+    width: 100% !important; max-width: 100% !important;
+  }
+
+  /* On cache les boutons et trucs inutiles à l'impression */
+  .btn, .no-print, input::placeholder { display: none !important; }
+  
+  /* On rend les champs jolis pour le papier */
+  input, select, textarea {
+    border: none !important; background: transparent !important;
+    color: black !important; padding: 0 !important; font-weight: bold;
+  }
+  
+  label { color: #666 !important; text-transform: uppercase; font-size: 0.8rem; margin-top: 15px;}
+  h2 { color: #000 !important; border-bottom: 2px solid #000; padding-bottom: 10px; }
+  
+  .print-header { display: block !important; margin-bottom: 20px; text-align: center; }
+  .print-header h1 { margin: 0; font-size: 20px; }
+  .print-footer { position: fixed; bottom: 0; width: 100%; text-align: center; font-size: 10px; color: #999; display: block !important; }
 }
 
-/* Badges Néon */
-.badge { padding: 5px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.5px; border: 1px solid transparent;}
-.badge-en_attente { background: rgba(56, 189, 248, 0.1); color: #38bdf8; border-color: rgba(56, 189, 248, 0.3); box-shadow: 0 0 10px rgba(56, 189, 248, 0.1); }
-.badge-en_cours { background: rgba(251, 146, 60, 0.1); color: #fb923c; border-color: rgba(251, 146, 60, 0.3); box-shadow: 0 0 10px rgba(251, 146, 60, 0.1); }
-.badge-termine { background: rgba(74, 222, 128, 0.1); color: #4ade80; border-color: rgba(74, 222, 128, 0.3); box-shadow: 0 0 10px rgba(74, 222, 128, 0.2); }
+.print-header, .print-footer { display: none; } /* Caché sur l'écran */
