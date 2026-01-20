@@ -83,29 +83,20 @@ function App() {
     return (v < mi || v > ma);
   }
 
-  // --- NOUVEAU : FONCTION EXPORT EXCEL ---
   const handleExportExcel = () => {
-    // 1. On prépare les données
     const headers = ["ID Dossier;Date;Nom;Prénom;Age;Analyses;Statut"];
     const rows = bilans.map(b => {
       const date = new Date(b.created_at).toLocaleDateString();
-      // On nettoie les textes pour éviter les bugs CSV (point-virgule interdit)
       const analyses = b.type_analyse.replace(/;/g, ","); 
       return `${b.id};${date};${b.nom_patient};${b.prenom_patient};${b.age_patient};${analyses};${b.statut}`;
     });
-
-    // 2. On crée le fichier CSV
     const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers, ...rows].join("\n");
-    
-    // 3. On déclenche le téléchargement
-    const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    link.setAttribute("href", encodeURI(csvContent));
     link.setAttribute("download", `pasteur_export_${new Date().toISOString().slice(0,10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
     showToast("Fichier Excel téléchargé !");
   }
 
@@ -163,7 +154,7 @@ function App() {
     return matchesSearch && matchesTab
   })
 
-  // VUE PATIENT (Identique)
+  // VUE PATIENT
   if (patientViewBilan) {
     return (
       <div style={{background: 'white', minHeight: '100vh', color: 'black', padding: '20px', fontFamily: 'Arial'}}>
@@ -190,7 +181,7 @@ function App() {
     )
   }
 
-  // VUE LOGIN (Identique)
+  // VUE LOGIN
   if (!user) {
     return (
       <>
@@ -211,8 +202,12 @@ function App() {
         <nav className="navbar">
           <div className="logo"><h1>Pasteur<span>Algérie</span></h1></div>
           <div style={{display:'flex', alignItems:'center', gap: '15px'}}>
+            
+            {/* BOUTON REFRESH (NOUVEAU) */}
+            <button className="btn-refresh" onClick={fetchData} title="Rafraîchir les données (Synchroniser)">↻</button>
+            
             <span className="badge" style={{background: 'rgba(255,255,255,0.1)', color: 'white'}}>Poste: {userRole.toUpperCase()}</span>
-            <button className="btn btn-edit" onClick={() => supabase.auth.signOut()}>Déconnexion</button>
+            <button className="btn btn-edit" onClick={() => supabase.auth.signOut()} title="Se déconnecter de la session">Déconnexion</button>
           </div>
         </nav>
 
@@ -225,17 +220,16 @@ function App() {
         )}
 
         <div style={{display: 'flex', gap: '20px', marginBottom: '20px', alignItems: 'center'}}>
-          <input type="text" className="search-input" placeholder="🔍 Rechercher..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-          <button className="btn btn-primary" style={{whiteSpace: 'nowrap', height: '50px'}} onClick={openNewBilan}>+ Nouveau Dossier</button>
-          {/* BOUTON EXPORT EXCEL */}
-          <button className="btn" style={{whiteSpace: 'nowrap', height: '50px', background: '#10b981', color: 'white'}} onClick={handleExportExcel}>📊 Export Excel</button>
+          <input type="text" className="search-input" placeholder="🔍 Rechercher (Nom, ID)..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} title="Rechercher un dossier par nom ou numéro" />
+          <button className="btn btn-primary" style={{whiteSpace: 'nowrap', height: '50px'}} onClick={openNewBilan} title="Créer un nouveau dossier patient">+ Nouveau Dossier</button>
+          <button className="btn" style={{whiteSpace: 'nowrap', height: '50px', background: '#10b981', color: 'white'}} onClick={handleExportExcel} title="Télécharger la liste en fichier Excel">📊 Export Excel</button>
         </div>
 
         <div className="tabs-container">
-          <button className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>Tous</button>
-          <button className={`tab-btn ${activeTab === 'en_attente' ? 'active' : ''}`} onClick={() => setActiveTab('en_attente')}>⏳ En Attente</button>
-          <button className={`tab-btn ${activeTab === 'en_cours' ? 'active' : ''}`} onClick={() => setActiveTab('en_cours')}>⚙️ En Cours</button>
-          <button className={`tab-btn ${activeTab === 'termine' ? 'active' : ''}`} onClick={() => setActiveTab('termine')}>✅ Terminés</button>
+          <button className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')} title="Voir tous les dossiers">Tous</button>
+          <button className={`tab-btn ${activeTab === 'en_attente' ? 'active' : ''}`} onClick={() => setActiveTab('en_attente')} title="Dossiers en attente de prélèvement">⏳ En Attente</button>
+          <button className={`tab-btn ${activeTab === 'en_cours' ? 'active' : ''}`} onClick={() => setActiveTab('en_cours')} title="Dossiers en cours d'analyse">⚙️ En Cours</button>
+          <button className={`tab-btn ${activeTab === 'termine' ? 'active' : ''}`} onClick={() => setActiveTab('termine')} title="Dossiers validés">✅ Terminés</button>
         </div>
 
         <div className="table-container">
@@ -251,8 +245,8 @@ function App() {
                     <td>{b.type_analyse.split(' + ').map((a,i)=><span key={i} style={{background:'rgba(255,255,255,0.1)', padding:'2px 6px', borderRadius:'4px', marginRight:'5px', fontSize:'0.75rem'}}>{a}</span>)}</td>
                     <td><span className={`badge badge-${b.statut}`}>{b.statut.replace('_', ' ')}</span></td>
                     <td style={{textAlign: 'right'}}>
-                      <button className="btn btn-action btn-edit" onClick={() => openEditBilan(b)}>Ouvrir</button>
-                      {userRole === 'Biologiste' && <button className="btn btn-action btn-danger" style={{marginLeft: '5px'}} onClick={() => handleDelete(b.id)}>🗑️</button>}
+                      <button className="btn btn-action btn-edit" onClick={() => openEditBilan(b)} title="Voir ou modifier le dossier">Ouvrir</button>
+                      {userRole === 'Biologiste' && <button className="btn btn-action btn-danger" style={{marginLeft: '5px'}} onClick={() => handleDelete(b.id)} title="Supprimer définitivement">🗑️</button>}
                     </td>
                   </tr>
                 ))
@@ -273,8 +267,8 @@ function App() {
               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: '20px'}}>
                 <h2 style={{margin:0, color: 'var(--primary)'}}>DOSSIER MÉDICAL</h2>
                 <div className="no-print">
-                   <button type="button" onClick={() => window.print()} className="btn btn-edit" style={{marginRight: '10px'}}>🖨️ Imprimer</button>
-                   <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-danger">X</button>
+                   <button type="button" onClick={() => window.print()} className="btn btn-edit" style={{marginRight: '10px'}} title="Imprimer le PDF">🖨️ Imprimer</button>
+                   <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-danger" title="Fermer la fenêtre">X</button>
                 </div>
               </div>
               <form onSubmit={handleSave} style={{display: 'flex', flexDirection: 'column', gap: '20px'}}>
@@ -290,16 +284,16 @@ function App() {
                   {currentBilan.id && <div style={{background: 'white', padding: '10px', borderRadius: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'}}><QRCode value={`${window.location.origin}?id=${currentBilan.id}`} size={100} /><p style={{color: 'black', fontSize: '0.6rem', marginTop: '5px', textAlign: 'center'}}>Scannez pour<br/>résultats</p></div>}
                 </div>
                 <div style={{background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '10px'}}>
-                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}><h3 style={{margin:0, fontSize:'0.9rem', color: '#94a3b8'}}>EXAMENS</h3><button type="button" className="no-print" onClick={ajouterType} style={{background: 'var(--secondary)', color:'white', border:'none', borderRadius:'4px', fontSize:'0.7rem', padding: '5px'}}>+ Ajouter</button></div>
-                  {typesAnalysesList.map((item, i) => (<div key={i} style={{marginBottom: '5px', display: 'flex', gap: '5px'}}><select className="form-input" value={item.selection} onChange={e => modifierType(i, 'selection', e.target.value)}>{LISTE_ANALYSES.map(t => <option key={t} value={t}>{t}</option>)}</select>{item.selection === 'Autre' && <input className="form-input" placeholder="Préciser..." value={item.custom} onChange={e => modifierType(i, 'custom', e.target.value)} />}<button type="button" className="no-print" onClick={() => supprimerType(i)} style={{color: '#ef4444', background: 'transparent', border:'none'}}>✕</button></div>))}
+                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}><h3 style={{margin:0, fontSize:'0.9rem', color: '#94a3b8'}}>EXAMENS</h3><button type="button" className="no-print" onClick={ajouterType} style={{background: 'var(--secondary)', color:'white', border:'none', borderRadius:'4px', fontSize:'0.7rem', padding: '5px'}} title="Ajouter une analyse">+ Ajouter</button></div>
+                  {typesAnalysesList.map((item, i) => (<div key={i} style={{marginBottom: '5px', display: 'flex', gap: '5px'}}><select className="form-input" value={item.selection} onChange={e => modifierType(i, 'selection', e.target.value)}>{LISTE_ANALYSES.map(t => <option key={t} value={t}>{t}</option>)}</select>{item.selection === 'Autre' && <input className="form-input" placeholder="Préciser..." value={item.custom} onChange={e => modifierType(i, 'custom', e.target.value)} />}<button type="button" className="no-print" onClick={() => supprimerType(i)} style={{color: '#ef4444', background: 'transparent', border:'none'}} title="Retirer cette ligne">✕</button></div>))}
                 </div>
                 {(userRole === 'Biologiste' || currentBilan.statut === 'termine') && (
                   <div style={{background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '10px'}}>
-                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}><h3 style={{margin:0, fontSize:'0.9rem', color: '#94a3b8'}}>RESULTATS</h3><button type="button" className="no-print" onClick={ajouterParametre} style={{background: 'var(--primary)', border: 'none', borderRadius: '50%', width: '25px', height: '25px', cursor: 'pointer'}}>+</button></div>
+                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}><h3 style={{margin:0, fontSize:'0.9rem', color: '#94a3b8'}}>RESULTATS</h3><button type="button" className="no-print" onClick={ajouterParametre} style={{background: 'var(--primary)', border: 'none', borderRadius: '50%', width: '25px', height: '25px', cursor: 'pointer'}} title="Ajouter un paramètre (Glycémie, etc)">+</button></div>
                     <div style={{display: 'flex', gap: '10px', fontSize: '0.7rem', color: '#94a3b8', paddingLeft: '5px', marginBottom: '5px'}}><div style={{flex: 2}}>PARAMÈTRE</div><div style={{flex: 1, textAlign: 'center'}}>RÉSULTAT</div><div style={{flex: 1, textAlign: 'center'}}>UNITÉ</div><div style={{flex: 1, textAlign: 'center'}}>NORME MIN-MAX</div><div style={{width: '20px'}}></div></div>
                     {parametres.map((param, i) => {
                       const isAlert = checkNorme(param.valeur, param.min, param.max)
-                      return <div key={i} style={{display: 'flex', gap: '10px', marginBottom: '5px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '5px'}}><input className="form-input" style={{flex: 2}} placeholder="Nom" value={param.nom} onChange={(e) => modifierParametre(i, 'nom', e.target.value)}/><input className="form-input" style={{flex: 1, textAlign: 'center', fontWeight: 'bold', color: isAlert ? '#ef4444' : 'inherit', borderColor: isAlert ? '#ef4444' : '#334155'}} placeholder="Val" value={param.valeur} onChange={(e) => modifierParametre(i, 'valeur', e.target.value)}/><input className="form-input" style={{flex: 1, textAlign: 'center'}} placeholder="Unité" value={param.unite} onChange={(e) => modifierParametre(i, 'unite', e.target.value)}/><div style={{flex: 1, display: 'flex', gap: '5px'}}><input className="form-input" style={{textAlign: 'center', fontSize: '0.8rem'}} placeholder="Min" value={param.min} onChange={(e) => modifierParametre(i, 'min', e.target.value)}/><input className="form-input" style={{textAlign: 'center', fontSize: '0.8rem'}} placeholder="Max" value={param.max} onChange={(e) => modifierParametre(i, 'max', e.target.value)}/></div><button type="button" className="no-print" onClick={() => supprimerParametre(i)} style={{background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer'}}>✕</button></div>
+                      return <div key={i} style={{display: 'flex', gap: '10px', marginBottom: '5px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '5px'}}><input className="form-input" style={{flex: 2}} placeholder="Nom" value={param.nom} onChange={(e) => modifierParametre(i, 'nom', e.target.value)}/><input className="form-input" style={{flex: 1, textAlign: 'center', fontWeight: 'bold', color: isAlert ? '#ef4444' : 'inherit', borderColor: isAlert ? '#ef4444' : '#334155'}} placeholder="Val" value={param.valeur} onChange={(e) => modifierParametre(i, 'valeur', e.target.value)}/><input className="form-input" style={{flex: 1, textAlign: 'center'}} placeholder="Unité" value={param.unite} onChange={(e) => modifierParametre(i, 'unite', e.target.value)}/><div style={{flex: 1, display: 'flex', gap: '5px'}}><input className="form-input" style={{textAlign: 'center', fontSize: '0.8rem'}} placeholder="Min" value={param.min} onChange={(e) => modifierParametre(i, 'min', e.target.value)}/><input className="form-input" style={{textAlign: 'center', fontSize: '0.8rem'}} placeholder="Max" value={param.max} onChange={(e) => modifierParametre(i, 'max', e.target.value)}/></div><button type="button" className="no-print" onClick={() => supprimerParametre(i)} style={{background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer'}} title="Retirer la ligne">✕</button></div>
                     })}
                   </div>
                 )}
@@ -307,7 +301,7 @@ function App() {
                   <label>Statut</label>
                   <select className="form-input" disabled={userRole === 'Reception'} value={currentBilan.statut} onChange={e => setCurrentBilan({...currentBilan, statut: e.target.value})}><option value="en_attente">En Attente</option><option value="en_cours">En Cours</option><option value="termine">Terminé & Validé</option></select>
                 </div>
-                <div className="no-print" style={{display: 'flex', justifyContent: 'flex-end', gap: '10px'}}><button type="button" className="btn btn-edit" onClick={() => setIsModalOpen(false)}>Fermer</button><button type="submit" className="btn btn-primary">Sauvegarder</button></div>
+                <div className="no-print" style={{display: 'flex', justifyContent: 'flex-end', gap: '10px'}}><button type="button" className="btn btn-edit" onClick={() => setIsModalOpen(false)}>Fermer</button><button type="submit" className="btn btn-primary" title="Enregistrer les modifications">Sauvegarder</button></div>
               </form>
               <div className="print-footer"><p>Fait à Alger. Document signé électroniquement.</p></div>
             </div>
