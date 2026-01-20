@@ -9,7 +9,7 @@ function App() {
   const [stats, setStats] = useState(null)
   const [user, setUser] = useState(null)
   const [userRole, setUserRole] = useState('Reception')
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(false) // Sert pour le chargement global ET les boutons
   
   // UX States
   const [searchTerm, setSearchTerm] = useState('')
@@ -26,7 +26,7 @@ function App() {
   const [password, setPassword] = useState('')
   const [patientViewBilan, setPatientViewBilan] = useState(null)
 
-  // ICI : On utilise le lien INTERNET directement. Plus de bug de fichier.
+  // Lien direct Internet (Solution Joker qui marche à 100%)
   const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_pasteur_algerie_logo.jpg/600px-Institut_pasteur_algerie_logo.jpg"
   
   const LISTE_ANALYSES = ["FNS Completo", "PCR Covid-19", "Biochimie", "Bilan Lipidique", "Sérologie", "Hormonologie", "Autre"]
@@ -44,13 +44,17 @@ function App() {
   }, [])
 
   async function checkUserSession() {
+    setLoading(true)
     const { data: { session } } = await supabase.auth.getSession()
     if (session?.user) {
       setUser(session.user)
       const { data: employe } = await supabase.from('employes').select('poste').eq('id', session.user.id).single()
       setUserRole(employe?.poste || 'Biologiste')
       fetchData()
+    } else {
+      setLoading(false)
     }
+    
     supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null)
       if (session?.user) fetchData()
@@ -69,7 +73,14 @@ function App() {
     setLoading(true)
     const { data: statsData } = await supabase.from('stats_labo').select('*').single()
     setStats(statsData)
-    const { data: bilansData } = await supabase.from('bilans').select('*').order('created_at', { ascending: false })
+    
+    // OPTIMISATION : On charge seulement les 50 derniers pour la rapidité
+    const { data: bilansData } = await supabase
+      .from('bilans')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50) 
+      
     setBilans(bilansData || [])
     setLoading(false)
   }
@@ -163,6 +174,8 @@ function App() {
 
   const handleSave = async (e) => {
     e.preventDefault()
+    setLoading(true) // Indicateur visuel
+    
     const typesStr = typesAnalysesList.map(t => t.selection === 'Autre' ? t.custom : t.selection).join(' + ')
     const dataToSave = {
       nom_patient: currentBilan.nom_patient, prenom_patient: currentBilan.prenom_patient, age_patient: currentBilan.age_patient, telephone: currentBilan.telephone,
@@ -179,6 +192,8 @@ function App() {
       bilanId = data.id; 
       await logAction("Création", `Création du dossier`, bilanId)
     }
+    
+    setLoading(false)
     setIsModalOpen(false)
     showToast("Dossier enregistré.")
     fetchData()
@@ -195,8 +210,13 @@ function App() {
 
   const handleLogin = async (e) => {
     e.preventDefault()
+    setLoading(true)
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) showToast(error.message, "error")
+    if (error) {
+        showToast(error.message, "error")
+        setLoading(false)
+    }
+    // Si succès, le useEffect se déclenche tout seul
   }
 
   const filteredBilans = bilans.filter(b => {
@@ -237,7 +257,19 @@ function App() {
     return (
       <>
         <div className="bio-background"><ul className="bacteria-list">{[...Array(10)].map((_,i)=><li key={i} className="bacteria"></li>)}</ul></div>
-        <div className="login-container"><div className="login-card"><h1>🧬</h1><h2>Pasteur<span style={{color: 'var(--primary)'}}>Lab</span></h2><form onSubmit={handleLogin}><input className="search-input" style={{marginBottom: '15px', textAlign: 'center'}} type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} /><input className="search-input" style={{marginBottom: '20px', textAlign: 'center'}} type="password" placeholder="Mot de passe" value={password} onChange={e=>setPassword(e.target.value)} /><button className="btn btn-primary" style={{width:'100%'}}>Connexion Staff</button></form></div></div>
+        <div className="login-container">
+            <div className="login-card">
+                <h1>🧬</h1>
+                <h2>Pasteur<span style={{color: 'var(--primary)'}}>Lab</span></h2>
+                <form onSubmit={handleLogin}>
+                    <input className="search-input" style={{marginBottom: '15px', textAlign: 'center'}} type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
+                    <input className="search-input" style={{marginBottom: '20px', textAlign: 'center'}} type="password" placeholder="Mot de passe" value={password} onChange={e=>setPassword(e.target.value)} />
+                    <button className="btn btn-primary" style={{width:'100%'}} disabled={loading}>
+                        {loading ? 'Connexion...' : 'Connexion Staff'}
+                    </button>
+                </form>
+            </div>
+        </div>
       </>
     )
   }
@@ -328,8 +360,8 @@ function App() {
                       <div style={{flex:1}}><label>Prénom</label><input className="form-input" required value={currentBilan.prenom_patient} onChange={e => setCurrentBilan({...currentBilan, prenom_patient: e.target.value})} /></div>
                     </div>
                     <div style={{display:'flex', gap:'10px'}}>
-                      <div style={{width:'80px'}}><label>Age</label><input className="form-input" value={currentBilan.age_patient || ''} onChange={e => setCurrentBilan({...currentBilan, age_patient: e.target.value})} /></div>
-                      <div style={{flex:1}}><label>Téléphone</label><input className="form-input" placeholder="05 50..." value={currentBilan.telephone || ''} onChange={e => setCurrentBilan({...currentBilan, telephone: e.target.value})} /></div>
+                      <div style={{width:'80px'}}><label>Age</label><input className="form-input" type="number" value={currentBilan.age_patient || ''} onChange={e => setCurrentBilan({...currentBilan, age_patient: e.target.value})} /></div>
+                      <div style={{flex:1}}><label>Téléphone</label><input className="form-input" type="tel" placeholder="05 50..." value={currentBilan.telephone || ''} onChange={e => setCurrentBilan({...currentBilan, telephone: e.target.value})} /></div>
                     </div>
                   </div>
                   {currentBilan.id && <div style={{background: 'white', padding: '10px', borderRadius: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'}}><div id="barcode-section"><Barcode value={currentBilan.id.split('-')[0].toUpperCase()} width={1.5} height={40} fontSize={10} /></div><button type="button" className="no-print btn-action" onClick={handlePrintLabel} style={{background:'#cbd5e1', color:'black', marginTop:'5px'}}>🖨️ Étiquette</button><hr style={{width:'100%', borderColor:'#eee', margin:'10px 0'}}/><QRCode value={`${window.location.origin}?id=${currentBilan.id}`} size={60} /></div>}
@@ -355,7 +387,7 @@ function App() {
                   </div>
                   {currentBilan.statut === 'termine' && <div style={{flex:1, background: 'rgba(16, 185, 129, 0.1)', padding: '15px', borderRadius: '10px', border:'1px solid rgba(16, 185, 129, 0.3)', display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center'}}><button type="button" id="btn-sms" onClick={handleSendSMS} className="btn-action" style={{background:'#10b981', color:'white', fontSize:'0.9rem', padding:'10px 20px', border:'none', cursor:'pointer'}}>📲 Envoyer SMS</button>{currentBilan.sms_envoye && <span style={{fontSize:'0.7rem', color:'#10b981', marginTop:'5px'}}>Déjà envoyé ✅</span>}</div>}
                 </div>
-                <div className="no-print" style={{display: 'flex', justifyContent: 'flex-end', gap: '10px'}}><button type="button" className="btn btn-edit" onClick={() => setIsModalOpen(false)}>Fermer</button><button type="submit" className="btn btn-primary">Sauvegarder</button></div>
+                <div className="no-print" style={{display: 'flex', justifyContent: 'flex-end', gap: '10px'}}><button type="button" className="btn btn-edit" onClick={() => setIsModalOpen(false)}>Fermer</button><button type="submit" className="btn btn-primary" disabled={loading}>{loading ? 'Sauvegarde...' : 'Sauvegarder'}</button></div>
                 {userRole === 'Biologiste' && logs.length > 0 && <div className="no-print" style={{marginTop:'20px', borderTop:'1px solid rgba(255,255,255,0.1)', paddingTop:'10px'}}><h4 style={{margin:'0 0 10px 0', color:'#64748b', fontSize:'0.8rem'}}>HISTORIQUE DES ACTIONS (Traçabilité)</h4><div style={{maxHeight:'100px', overflowY:'auto'}}>{logs.map(log => (<div key={log.id} style={{fontSize:'0.75rem', color:'#94a3b8', marginBottom:'4px'}}><span style={{color:'var(--primary)'}}>{new Date(log.created_at).toLocaleString()}</span> - <strong>{log.user_email}</strong> : {log.action} ({log.details})</div>))}</div></div>}
               </form>
               <div className="print-footer"><p>Fait à Alger. Document signé électroniquement.</p></div>
