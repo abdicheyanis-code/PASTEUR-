@@ -26,7 +26,7 @@ function App() {
   const [password, setPassword] = useState('')
   const [patientViewBilan, setPatientViewBilan] = useState(null)
 
-  const LOGO_URL = "/logo.png" // Plus de lien internet bizarre
+const LOGO_URL = "/logo.png"
   const LISTE_ANALYSES = ["FNS Completo", "PCR Covid-19", "Biochimie", "Bilan Lipidique", "Sérologie", "Hormonologie", "Autre"]
 
   const showToast = (message, type = 'success') => {
