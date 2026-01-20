@@ -128,18 +128,31 @@ function App() {
   }
 
   const handleSendSMS = async () => {
+    // Vérification du numéro
     if (!currentBilan.telephone) return showToast("Numéro de téléphone manquant !", "error");
+    
+    // Nettoyage du numéro (Pour l'Algérie)
+    // On enlève les espaces et le premier 0, et on ajoute 213
+    let cleanTel = currentBilan.telephone.replace(/\s/g, ''); // Enlève les espaces
+    if (cleanTel.startsWith('0')) cleanTel = cleanTel.substring(1); // Enlève le 0
+    if (!cleanTel.startsWith('213')) cleanTel = '213' + cleanTel; // Ajoute l'indicatif
+
     const btn = document.getElementById('btn-sms');
-    if(btn) btn.innerText = "Envoi...";
-    setTimeout(async () => {
-      await supabase.from('bilans').update({ sms_envoye: true }).eq('id', currentBilan.id);
-      setCurrentBilan({ ...currentBilan, sms_envoye: true });
-      const messagePro = "Institut Pasteur : Vos résultats sont disponibles. Veuillez vous présenter au laboratoire muni de votre pièce d'identité."
-      await logAction("SMS", `Msg envoyé : "${messagePro}"`, currentBilan.id);
-      fetchLogs(currentBilan.id); 
-      showToast(`SMS envoyé au ${currentBilan.telephone} !`);
-      if(btn) btn.innerText = "📲 Envoyer SMS";
-    }, 1500);
+    if(btn) btn.innerText = "Ouverture WhatsApp...";
+    
+    // Le message
+    const message = `Bonjour ${currentBilan.nom_patient}, Institut Pasteur : Vos analyses sont prêtes. Veuillez passer les récupérer muni de votre pièce d'identité.`;
+    
+    // Mise à jour Base de données (pour dire qu'on a fait l'action)
+    await supabase.from('bilans').update({ sms_envoye: true }).eq('id', currentBilan.id);
+    setCurrentBilan({ ...currentBilan, sms_envoye: true });
+    await logAction("WhatsApp", `Message envoyé au +${cleanTel}`, currentBilan.id);
+    
+    // OUVERTURE DE WHATSAPP
+    window.open(`https://wa.me/${cleanTel}?text=${encodeURIComponent(message)}`, '_blank');
+    
+    fetchLogs(currentBilan.id); 
+    if(btn) btn.innerText = "📲 Envoyer WhatsApp";
   }
 
   const handlePrintLabel = () => {
