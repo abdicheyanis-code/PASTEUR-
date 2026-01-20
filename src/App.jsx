@@ -1,8 +1,7 @@
-import logoPasteur from './logo.png'
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import QRCode from 'react-qr-code'
-import Barcode from 'react-barcode' // Pour les étiquettes tubes
+import Barcode from 'react-barcode'
 import './App.css'
 
 function App() {
@@ -21,13 +20,15 @@ function App() {
   const [currentBilan, setCurrentBilan] = useState(null)
   const [typesAnalysesList, setTypesAnalysesList] = useState([]) 
   const [parametres, setParametres] = useState([])
-  const [logs, setLogs] = useState([]) // Pour stocker l'historique du dossier
+  const [logs, setLogs] = useState([])
   
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [patientViewBilan, setPatientViewBilan] = useState(null)
 
-const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_pasteur_algerie_logo.jpg/600px-Institut_pasteur_algerie_logo.jpg"
+  // ICI : On utilise le lien INTERNET directement. Plus de bug de fichier.
+  const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_pasteur_algerie_logo.jpg/600px-Institut_pasteur_algerie_logo.jpg"
+  
   const LISTE_ANALYSES = ["FNS Completo", "PCR Covid-19", "Biochimie", "Bilan Lipidique", "Sérologie", "Hormonologie", "Autre"]
 
   const showToast = (message, type = 'success') => {
@@ -73,24 +74,17 @@ const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_
     setLoading(false)
   }
 
-  // --- FONCTION AUDIT (MOUCHARD) ---
+  // Fonctions Audit
   const logAction = async (action, details, bilanId) => {
     if (!bilanId) return
-    await supabase.from('audit_logs').insert([{
-      user_email: user.email,
-      action: action,
-      details: details,
-      bilan_id: bilanId
-    }])
+    await supabase.from('audit_logs').insert([{ user_email: user.email, action: action, details: details, bilan_id: bilanId }])
   }
-
-  // Charger les logs d'un dossier
   const fetchLogs = async (bilanId) => {
     const { data } = await supabase.from('audit_logs').select('*').eq('bilan_id', bilanId).order('created_at', { ascending: false })
     setLogs(data || [])
   }
 
-  // --- LOGIQUE METIER ---
+  // Logique métier
   const ajouterType = () => setTypesAnalysesList([...typesAnalysesList, { selection: 'FNS Completo', custom: '' }])
   const supprimerType = (i) => { const l = [...typesAnalysesList]; if(l.length > 1) { l.splice(i, 1); setTypesAnalysesList(l); } }
   const modifierType = (i, f, v) => { const l = [...typesAnalysesList]; l[i][f] = v; setTypesAnalysesList(l); }
@@ -122,29 +116,21 @@ const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_
     showToast("Fichier Excel téléchargé !");
   }
 
-  // --- ACTION ENVOI SMS (SIMULATION) ---
   const handleSendSMS = async () => {
     if (!currentBilan.telephone) return showToast("Numéro de téléphone manquant !", "error");
-    
-    // Simulation d'attente
     const btn = document.getElementById('btn-sms');
     if(btn) btn.innerText = "Envoi...";
-    
     setTimeout(async () => {
-      // Mise à jour DB
       await supabase.from('bilans').update({ sms_envoye: true }).eq('id', currentBilan.id);
       setCurrentBilan({ ...currentBilan, sms_envoye: true });
-      
-      // Log de l'action
-      await logAction("SMS", `SMS envoyé au ${currentBilan.telephone}`, currentBilan.id);
-      
-      fetchLogs(currentBilan.id); // Rafraichir les logs
+      const messagePro = "Institut Pasteur : Vos résultats sont disponibles. Veuillez vous présenter au laboratoire muni de votre pièce d'identité."
+      await logAction("SMS", `Msg envoyé : "${messagePro}"`, currentBilan.id);
+      fetchLogs(currentBilan.id); 
       showToast(`SMS envoyé au ${currentBilan.telephone} !`);
       if(btn) btn.innerText = "📲 Envoyer SMS";
     }, 1500);
   }
 
-  // Impression Étiquette Tube
   const handlePrintLabel = () => {
     const content = document.getElementById('barcode-section').innerHTML;
     const win = window.open('', '', 'height=300,width=500');
@@ -171,8 +157,6 @@ const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_
       setTypesAnalysesList(parties.map(p => LISTE_ANALYSES.includes(p) ? {selection: p, custom: ''} : {selection: 'Autre', custom: p}))
     } else { setTypesAnalysesList([{ selection: 'FNS Completo', custom: '' }]) }
     try { if (bilan.resultat_analyse && bilan.resultat_analyse.startsWith('[')) setParametres(JSON.parse(bilan.resultat_analyse)); else setParametres([]) } catch { setParametres([]) }
-    
-    // Charger l'historique
     fetchLogs(bilan.id);
     setIsModalOpen(true)
   }
@@ -187,16 +171,14 @@ const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_
     }
 
     let bilanId = currentBilan.id;
-
     if (currentBilan.id) {
       await supabase.from('bilans').update(dataToSave).eq('id', currentBilan.id)
       await logAction("Modification", `Mise à jour du dossier`, currentBilan.id)
     } else {
       const { data } = await supabase.from('bilans').insert([{ ...dataToSave, cree_par: user.id }]).select().single()
-      bilanId = data.id; // On récupère l'ID du nouveau
+      bilanId = data.id; 
       await logAction("Création", `Création du dossier`, bilanId)
     }
-    
     setIsModalOpen(false)
     showToast("Dossier enregistré.")
     fetchData()
@@ -204,7 +186,7 @@ const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_
 
   const handleDelete = async (id) => {
     if (confirm("Supprimer ce dossier ?")) {
-      await logAction("Suppression", "Suppression du dossier", id) // On log avant (si on garde l'ID) ou on ignore
+      await logAction("Suppression", "Suppression du dossier", id)
       await supabase.from('bilans').delete().eq('id', id)
       showToast("Dossier supprimé.", "error")
       fetchData()
@@ -223,7 +205,7 @@ const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_
     return matchesSearch && matchesTab
   })
 
-  // VUE PATIENT (Identique)
+  // VUE PATIENT
   if (patientViewBilan) {
     return (
       <div style={{background: 'white', minHeight: '100vh', color: 'black', padding: '20px', fontFamily: 'Arial'}}>
@@ -250,7 +232,7 @@ const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_
     )
   }
 
-  // VUE LOGIN (Identique)
+  // VUE LOGIN
   if (!user) {
     return (
       <>
@@ -337,7 +319,6 @@ const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_
                    <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-danger">X</button>
                 </div>
               </div>
-              
               <form onSubmit={handleSave} style={{display: 'flex', flexDirection: 'column', gap: '20px'}}>
                 <div style={{display: 'flex', gap: '20px'}}>
                   <div style={{flex: 1, background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '10px'}}>
@@ -348,29 +329,15 @@ const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_
                     </div>
                     <div style={{display:'flex', gap:'10px'}}>
                       <div style={{width:'80px'}}><label>Age</label><input className="form-input" value={currentBilan.age_patient || ''} onChange={e => setCurrentBilan({...currentBilan, age_patient: e.target.value})} /></div>
-                      {/* CHAMP TELEPHONE */}
                       <div style={{flex:1}}><label>Téléphone</label><input className="form-input" placeholder="05 50..." value={currentBilan.telephone || ''} onChange={e => setCurrentBilan({...currentBilan, telephone: e.target.value})} /></div>
                     </div>
                   </div>
-                  
-                  {currentBilan.id && (
-                    <div style={{background: 'white', padding: '10px', borderRadius: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'}}>
-                      {/* CODE BARRE & QR */}
-                      <div id="barcode-section" style={{textAlign:'center'}}>
-                        <Barcode value={currentBilan.id.split('-')[0].toUpperCase()} width={1.5} height={40} fontSize={10} />
-                      </div>
-                      <button type="button" className="no-print btn-action" onClick={handlePrintLabel} style={{background:'#cbd5e1', color:'black', marginTop:'5px'}}>🖨️ Étiquette</button>
-                      <hr style={{width:'100%', borderColor:'#eee', margin:'10px 0'}}/>
-                      <QRCode value={`${window.location.origin}?id=${currentBilan.id}`} size={60} />
-                    </div>
-                  )}
+                  {currentBilan.id && <div style={{background: 'white', padding: '10px', borderRadius: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'}}><div id="barcode-section"><Barcode value={currentBilan.id.split('-')[0].toUpperCase()} width={1.5} height={40} fontSize={10} /></div><button type="button" className="no-print btn-action" onClick={handlePrintLabel} style={{background:'#cbd5e1', color:'black', marginTop:'5px'}}>🖨️ Étiquette</button><hr style={{width:'100%', borderColor:'#eee', margin:'10px 0'}}/><QRCode value={`${window.location.origin}?id=${currentBilan.id}`} size={60} /></div>}
                 </div>
-
                 <div style={{background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '10px'}}>
                   <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}><h3 style={{margin:0, fontSize:'0.9rem', color: '#94a3b8'}}>EXAMENS</h3><button type="button" className="no-print" onClick={ajouterType} style={{background: 'var(--secondary)', color:'white', border:'none', borderRadius:'4px', fontSize:'0.7rem', padding: '5px'}}>+ Ajouter</button></div>
                   {typesAnalysesList.map((item, i) => (<div key={i} style={{marginBottom: '5px', display: 'flex', gap: '5px'}}><select className="form-input" value={item.selection} onChange={e => modifierType(i, 'selection', e.target.value)}>{LISTE_ANALYSES.map(t => <option key={t} value={t}>{t}</option>)}</select>{item.selection === 'Autre' && <input className="form-input" placeholder="Préciser..." value={item.custom} onChange={e => modifierType(i, 'custom', e.target.value)} />}<button type="button" className="no-print" onClick={() => supprimerType(i)} style={{color: '#ef4444', background: 'transparent', border:'none'}}>✕</button></div>))}
                 </div>
-
                 {(userRole === 'Biologiste' || currentBilan.statut === 'termine') && (
                   <div style={{background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '10px'}}>
                     <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}><h3 style={{margin:0, fontSize:'0.9rem', color: '#94a3b8'}}>RESULTATS</h3><button type="button" className="no-print" onClick={ajouterParametre} style={{background: 'var(--primary)', border: 'none', borderRadius: '50%', width: '25px', height: '25px', cursor: 'pointer'}}>+</button></div>
@@ -381,36 +348,15 @@ const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_
                     })}
                   </div>
                 )}
-                
-                {/* ZONE STATUT & SMS */}
                 <div style={{display:'flex', gap:'20px'}}>
                   <div style={{flex:1, background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '10px'}}>
                     <label>Statut</label>
                     <select className="form-input" disabled={userRole === 'Reception'} value={currentBilan.statut} onChange={e => setCurrentBilan({...currentBilan, statut: e.target.value})}><option value="en_attente">En Attente</option><option value="en_cours">En Cours</option><option value="termine">Terminé & Validé</option></select>
                   </div>
-                  {currentBilan.statut === 'termine' && (
-                    <div style={{flex:1, background: 'rgba(16, 185, 129, 0.1)', padding: '15px', borderRadius: '10px', border:'1px solid rgba(16, 185, 129, 0.3)', display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center'}}>
-                      <button type="button" id="btn-sms" onClick={handleSendSMS} className="btn-action" style={{background:'#10b981', color:'white', fontSize:'0.9rem', padding:'10px 20px', border:'none', cursor:'pointer'}}>📲 Envoyer SMS</button>
-                      {currentBilan.sms_envoye && <span style={{fontSize:'0.7rem', color:'#10b981', marginTop:'5px'}}>Déjà envoyé ✅</span>}
-                    </div>
-                  )}
+                  {currentBilan.statut === 'termine' && <div style={{flex:1, background: 'rgba(16, 185, 129, 0.1)', padding: '15px', borderRadius: '10px', border:'1px solid rgba(16, 185, 129, 0.3)', display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center'}}><button type="button" id="btn-sms" onClick={handleSendSMS} className="btn-action" style={{background:'#10b981', color:'white', fontSize:'0.9rem', padding:'10px 20px', border:'none', cursor:'pointer'}}>📲 Envoyer SMS</button>{currentBilan.sms_envoye && <span style={{fontSize:'0.7rem', color:'#10b981', marginTop:'5px'}}>Déjà envoyé ✅</span>}</div>}
                 </div>
-
                 <div className="no-print" style={{display: 'flex', justifyContent: 'flex-end', gap: '10px'}}><button type="button" className="btn btn-edit" onClick={() => setIsModalOpen(false)}>Fermer</button><button type="submit" className="btn btn-primary">Sauvegarder</button></div>
-                
-                {/* ZONE AUDIT LOGS (Visible pour Biologiste) */}
-                {userRole === 'Biologiste' && logs.length > 0 && (
-                  <div className="no-print" style={{marginTop:'20px', borderTop:'1px solid rgba(255,255,255,0.1)', paddingTop:'10px'}}>
-                    <h4 style={{margin:'0 0 10px 0', color:'#64748b', fontSize:'0.8rem'}}>HISTORIQUE DES ACTIONS (Traçabilité)</h4>
-                    <div style={{maxHeight:'100px', overflowY:'auto'}}>
-                      {logs.map(log => (
-                        <div key={log.id} style={{fontSize:'0.75rem', color:'#94a3b8', marginBottom:'4px'}}>
-                          <span style={{color:'var(--primary)'}}>{new Date(log.created_at).toLocaleString()}</span> - <strong>{log.user_email}</strong> : {log.action} ({log.details})
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {userRole === 'Biologiste' && logs.length > 0 && <div className="no-print" style={{marginTop:'20px', borderTop:'1px solid rgba(255,255,255,0.1)', paddingTop:'10px'}}><h4 style={{margin:'0 0 10px 0', color:'#64748b', fontSize:'0.8rem'}}>HISTORIQUE DES ACTIONS (Traçabilité)</h4><div style={{maxHeight:'100px', overflowY:'auto'}}>{logs.map(log => (<div key={log.id} style={{fontSize:'0.75rem', color:'#94a3b8', marginBottom:'4px'}}><span style={{color:'var(--primary)'}}>{new Date(log.created_at).toLocaleString()}</span> - <strong>{log.user_email}</strong> : {log.action} ({log.details})</div>))}</div></div>}
               </form>
               <div className="print-footer"><p>Fait à Alger. Document signé électroniquement.</p></div>
             </div>
