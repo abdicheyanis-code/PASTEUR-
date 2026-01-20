@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import QRCode from 'react-qr-code'
+import Barcode from 'react-barcode' // Pour les étiquettes tubes
 import './App.css'
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
   const [currentBilan, setCurrentBilan] = useState(null)
   const [typesAnalysesList, setTypesAnalysesList] = useState([]) 
   const [parametres, setParametres] = useState([])
+  const [logs, setLogs] = useState([]) // Pour stocker l'historique du dossier
   
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -70,6 +72,24 @@ function App() {
     setLoading(false)
   }
 
+  // --- FONCTION AUDIT (MOUCHARD) ---
+  const logAction = async (action, details, bilanId) => {
+    if (!bilanId) return
+    await supabase.from('audit_logs').insert([{
+      user_email: user.email,
+      action: action,
+      details: details,
+      bilan_id: bilanId
+    }])
+  }
+
+  // Charger les logs d'un dossier
+  const fetchLogs = async (bilanId) => {
+    const { data } = await supabase.from('audit_logs').select('*').eq('bilan_id', bilanId).order('created_at', { ascending: false })
+    setLogs(data || [])
+  }
+
+  // --- LOGIQUE METIER ---
   const ajouterType = () => setTypesAnalysesList([...typesAnalysesList, { selection: 'FNS Completo', custom: '' }])
   const supprimerType = (i) => { const l = [...typesAnalysesList]; if(l.length > 1) { l.splice(i, 1); setTypesAnalysesList(l); } }
   const modifierType = (i, f, v) => { const l = [...typesAnalysesList]; l[i][f] = v; setTypesAnalysesList(l); }
@@ -84,26 +104,62 @@ function App() {
   }
 
   const handleExportExcel = () => {
-    const headers = ["ID Dossier;Date;Nom;Prénom;Age;Analyses;Statut"];
+    const headers = ["ID;Date;Nom;Prénom;Tel;Analyses;Statut;SMS Envoyé"];
     const rows = bilans.map(b => {
       const date = new Date(b.created_at).toLocaleDateString();
       const analyses = b.type_analyse.replace(/;/g, ","); 
-      return `${b.id};${date};${b.nom_patient};${b.prenom_patient};${b.age_patient};${analyses};${b.statut}`;
+      const sms = b.sms_envoye ? "OUI" : "NON";
+      return `${b.id};${date};${b.nom_patient};${b.prenom_patient};${b.telephone};${analyses};${b.statut};${sms}`;
     });
     const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers, ...rows].join("\n");
     const link = document.createElement("a");
     link.setAttribute("href", encodeURI(csvContent));
-    link.setAttribute("download", `pasteur_export_${new Date().toISOString().slice(0,10)}.csv`);
+    link.setAttribute("download", `pasteur_export.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     showToast("Fichier Excel téléchargé !");
   }
 
+  // --- ACTION ENVOI SMS (SIMULATION) ---
+  const handleSendSMS = async () => {
+    if (!currentBilan.telephone) return showToast("Numéro de téléphone manquant !", "error");
+    
+    // Simulation d'attente
+    const btn = document.getElementById('btn-sms');
+    if(btn) btn.innerText = "Envoi...";
+    
+    setTimeout(async () => {
+      // Mise à jour DB
+      await supabase.from('bilans').update({ sms_envoye: true }).eq('id', currentBilan.id);
+      setCurrentBilan({ ...currentBilan, sms_envoye: true });
+      
+      // Log de l'action
+      await logAction("SMS", `SMS envoyé au ${currentBilan.telephone}`, currentBilan.id);
+      
+      fetchLogs(currentBilan.id); // Rafraichir les logs
+      showToast(`SMS envoyé au ${currentBilan.telephone} !`);
+      if(btn) btn.innerText = "📲 Envoyer SMS";
+    }, 1500);
+  }
+
+  // Impression Étiquette Tube
+  const handlePrintLabel = () => {
+    const content = document.getElementById('barcode-section').innerHTML;
+    const win = window.open('', '', 'height=300,width=500');
+    win.document.write('<html><body style="text-align:center;">');
+    win.document.write(content);
+    win.document.write('<p style="font-family:monospace; margin:0;">' + currentBilan.nom_patient + '</p>');
+    win.document.write('</body></html>');
+    win.document.close();
+    win.print();
+  }
+
   const openNewBilan = () => {
-    setCurrentBilan({ nom_patient: '', prenom_patient: '', age_patient: '', statut: 'en_attente' })
+    setCurrentBilan({ nom_patient: '', prenom_patient: '', age_patient: '', telephone: '', statut: 'en_attente', sms_envoye: false })
     setTypesAnalysesList([{ selection: 'FNS Completo', custom: '' }])
     setParametres([{ nom: 'Hémoglobine', valeur: '', unite: 'g/dL', min: '12', max: '16' }])
+    setLogs([])
     setIsModalOpen(true)
   }
 
@@ -114,6 +170,9 @@ function App() {
       setTypesAnalysesList(parties.map(p => LISTE_ANALYSES.includes(p) ? {selection: p, custom: ''} : {selection: 'Autre', custom: p}))
     } else { setTypesAnalysesList([{ selection: 'FNS Completo', custom: '' }]) }
     try { if (bilan.resultat_analyse && bilan.resultat_analyse.startsWith('[')) setParametres(JSON.parse(bilan.resultat_analyse)); else setParametres([]) } catch { setParametres([]) }
+    
+    // Charger l'historique
+    fetchLogs(bilan.id);
     setIsModalOpen(true)
   }
 
@@ -121,21 +180,30 @@ function App() {
     e.preventDefault()
     const typesStr = typesAnalysesList.map(t => t.selection === 'Autre' ? t.custom : t.selection).join(' + ')
     const dataToSave = {
-      nom_patient: currentBilan.nom_patient, prenom_patient: currentBilan.prenom_patient, age_patient: currentBilan.age_patient,
+      nom_patient: currentBilan.nom_patient, prenom_patient: currentBilan.prenom_patient, age_patient: currentBilan.age_patient, telephone: currentBilan.telephone,
       type_analyse: typesStr, statut: currentBilan.statut, resultat_analyse: JSON.stringify(parametres),
       date_fin_analyse: currentBilan.statut === 'termine' ? new Date() : null
     }
 
-    if (currentBilan.id) await supabase.from('bilans').update(dataToSave).eq('id', currentBilan.id)
-    else await supabase.from('bilans').insert([{ ...dataToSave, cree_par: user.id }])
+    let bilanId = currentBilan.id;
+
+    if (currentBilan.id) {
+      await supabase.from('bilans').update(dataToSave).eq('id', currentBilan.id)
+      await logAction("Modification", `Mise à jour du dossier`, currentBilan.id)
+    } else {
+      const { data } = await supabase.from('bilans').insert([{ ...dataToSave, cree_par: user.id }]).select().single()
+      bilanId = data.id; // On récupère l'ID du nouveau
+      await logAction("Création", `Création du dossier`, bilanId)
+    }
     
     setIsModalOpen(false)
-    showToast("Dossier enregistré avec succès !")
+    showToast("Dossier enregistré.")
     fetchData()
   }
 
   const handleDelete = async (id) => {
     if (confirm("Supprimer ce dossier ?")) {
+      await logAction("Suppression", "Suppression du dossier", id) // On log avant (si on garde l'ID) ou on ignore
       await supabase.from('bilans').delete().eq('id', id)
       showToast("Dossier supprimé.", "error")
       fetchData()
@@ -154,7 +222,7 @@ function App() {
     return matchesSearch && matchesTab
   })
 
-  // VUE PATIENT
+  // VUE PATIENT (Identique)
   if (patientViewBilan) {
     return (
       <div style={{background: 'white', minHeight: '100vh', color: 'black', padding: '20px', fontFamily: 'Arial'}}>
@@ -181,7 +249,7 @@ function App() {
     )
   }
 
-  // VUE LOGIN
+  // VUE LOGIN (Identique)
   if (!user) {
     return (
       <>
@@ -202,12 +270,9 @@ function App() {
         <nav className="navbar">
           <div className="logo"><h1>Pasteur<span>Algérie</span></h1></div>
           <div style={{display:'flex', alignItems:'center', gap: '15px'}}>
-            
-            {/* BOUTON REFRESH (NOUVEAU) */}
-            <button className="btn-refresh" onClick={fetchData} title="Rafraîchir les données (Synchroniser)">↻</button>
-            
+            <button className="btn-refresh" onClick={fetchData} title="Rafraîchir">↻</button>
             <span className="badge" style={{background: 'rgba(255,255,255,0.1)', color: 'white'}}>Poste: {userRole.toUpperCase()}</span>
-            <button className="btn btn-edit" onClick={() => supabase.auth.signOut()} title="Se déconnecter de la session">Déconnexion</button>
+            <button className="btn btn-edit" onClick={() => supabase.auth.signOut()}>Déconnexion</button>
           </div>
         </nav>
 
@@ -220,16 +285,16 @@ function App() {
         )}
 
         <div style={{display: 'flex', gap: '20px', marginBottom: '20px', alignItems: 'center'}}>
-          <input type="text" className="search-input" placeholder="🔍 Rechercher (Nom, ID)..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} title="Rechercher un dossier par nom ou numéro" />
-          <button className="btn btn-primary" style={{whiteSpace: 'nowrap', height: '50px'}} onClick={openNewBilan} title="Créer un nouveau dossier patient">+ Nouveau Dossier</button>
-          <button className="btn" style={{whiteSpace: 'nowrap', height: '50px', background: '#10b981', color: 'white'}} onClick={handleExportExcel} title="Télécharger la liste en fichier Excel">📊 Export Excel</button>
+          <input type="text" className="search-input" placeholder="🔍 Rechercher (Nom, ID)..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          <button className="btn btn-primary" style={{whiteSpace: 'nowrap', height: '50px'}} onClick={openNewBilan}>+ Nouveau Dossier</button>
+          <button className="btn" style={{whiteSpace: 'nowrap', height: '50px', background: '#10b981', color: 'white'}} onClick={handleExportExcel}>📊 Export Excel</button>
         </div>
 
         <div className="tabs-container">
-          <button className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')} title="Voir tous les dossiers">Tous</button>
-          <button className={`tab-btn ${activeTab === 'en_attente' ? 'active' : ''}`} onClick={() => setActiveTab('en_attente')} title="Dossiers en attente de prélèvement">⏳ En Attente</button>
-          <button className={`tab-btn ${activeTab === 'en_cours' ? 'active' : ''}`} onClick={() => setActiveTab('en_cours')} title="Dossiers en cours d'analyse">⚙️ En Cours</button>
-          <button className={`tab-btn ${activeTab === 'termine' ? 'active' : ''}`} onClick={() => setActiveTab('termine')} title="Dossiers validés">✅ Terminés</button>
+          <button className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>Tous</button>
+          <button className={`tab-btn ${activeTab === 'en_attente' ? 'active' : ''}`} onClick={() => setActiveTab('en_attente')}>⏳ En Attente</button>
+          <button className={`tab-btn ${activeTab === 'en_cours' ? 'active' : ''}`} onClick={() => setActiveTab('en_cours')}>⚙️ En Cours</button>
+          <button className={`tab-btn ${activeTab === 'termine' ? 'active' : ''}`} onClick={() => setActiveTab('termine')}>✅ Terminés</button>
         </div>
 
         <div className="table-container">
@@ -245,8 +310,8 @@ function App() {
                     <td>{b.type_analyse.split(' + ').map((a,i)=><span key={i} style={{background:'rgba(255,255,255,0.1)', padding:'2px 6px', borderRadius:'4px', marginRight:'5px', fontSize:'0.75rem'}}>{a}</span>)}</td>
                     <td><span className={`badge badge-${b.statut}`}>{b.statut.replace('_', ' ')}</span></td>
                     <td style={{textAlign: 'right'}}>
-                      <button className="btn btn-action btn-edit" onClick={() => openEditBilan(b)} title="Voir ou modifier le dossier">Ouvrir</button>
-                      {userRole === 'Biologiste' && <button className="btn btn-action btn-danger" style={{marginLeft: '5px'}} onClick={() => handleDelete(b.id)} title="Supprimer définitivement">🗑️</button>}
+                      <button className="btn btn-action btn-edit" onClick={() => openEditBilan(b)}>Ouvrir</button>
+                      {userRole === 'Biologiste' && <button className="btn btn-action btn-danger" style={{marginLeft: '5px'}} onClick={() => handleDelete(b.id)}>🗑️</button>}
                     </td>
                   </tr>
                 ))
@@ -267,10 +332,11 @@ function App() {
               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: '20px'}}>
                 <h2 style={{margin:0, color: 'var(--primary)'}}>DOSSIER MÉDICAL</h2>
                 <div className="no-print">
-                   <button type="button" onClick={() => window.print()} className="btn btn-edit" style={{marginRight: '10px'}} title="Imprimer le PDF">🖨️ Imprimer</button>
-                   <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-danger" title="Fermer la fenêtre">X</button>
+                   <button type="button" onClick={() => window.print()} className="btn btn-edit" style={{marginRight: '10px'}}>🖨️ Imprimer</button>
+                   <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-danger">X</button>
                 </div>
               </div>
+              
               <form onSubmit={handleSave} style={{display: 'flex', flexDirection: 'column', gap: '20px'}}>
                 <div style={{display: 'flex', gap: '20px'}}>
                   <div style={{flex: 1, background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '10px'}}>
@@ -279,29 +345,71 @@ function App() {
                       <div style={{flex:1}}><label>Nom</label><input className="form-input" required value={currentBilan.nom_patient} onChange={e => setCurrentBilan({...currentBilan, nom_patient: e.target.value})} /></div>
                       <div style={{flex:1}}><label>Prénom</label><input className="form-input" required value={currentBilan.prenom_patient} onChange={e => setCurrentBilan({...currentBilan, prenom_patient: e.target.value})} /></div>
                     </div>
-                    <div><label>Age</label><input className="form-input" style={{width: '60px'}} value={currentBilan.age_patient || ''} onChange={e => setCurrentBilan({...currentBilan, age_patient: e.target.value})} /> ans</div>
+                    <div style={{display:'flex', gap:'10px'}}>
+                      <div style={{width:'80px'}}><label>Age</label><input className="form-input" value={currentBilan.age_patient || ''} onChange={e => setCurrentBilan({...currentBilan, age_patient: e.target.value})} /></div>
+                      {/* CHAMP TELEPHONE */}
+                      <div style={{flex:1}}><label>Téléphone</label><input className="form-input" placeholder="05 50..." value={currentBilan.telephone || ''} onChange={e => setCurrentBilan({...currentBilan, telephone: e.target.value})} /></div>
+                    </div>
                   </div>
-                  {currentBilan.id && <div style={{background: 'white', padding: '10px', borderRadius: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'}}><QRCode value={`${window.location.origin}?id=${currentBilan.id}`} size={100} /><p style={{color: 'black', fontSize: '0.6rem', marginTop: '5px', textAlign: 'center'}}>Scannez pour<br/>résultats</p></div>}
+                  
+                  {currentBilan.id && (
+                    <div style={{background: 'white', padding: '10px', borderRadius: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'}}>
+                      {/* CODE BARRE & QR */}
+                      <div id="barcode-section" style={{textAlign:'center'}}>
+                        <Barcode value={currentBilan.id.split('-')[0].toUpperCase()} width={1.5} height={40} fontSize={10} />
+                      </div>
+                      <button type="button" className="no-print btn-action" onClick={handlePrintLabel} style={{background:'#cbd5e1', color:'black', marginTop:'5px'}}>🖨️ Étiquette</button>
+                      <hr style={{width:'100%', borderColor:'#eee', margin:'10px 0'}}/>
+                      <QRCode value={`${window.location.origin}?id=${currentBilan.id}`} size={60} />
+                    </div>
+                  )}
                 </div>
+
                 <div style={{background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '10px'}}>
-                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}><h3 style={{margin:0, fontSize:'0.9rem', color: '#94a3b8'}}>EXAMENS</h3><button type="button" className="no-print" onClick={ajouterType} style={{background: 'var(--secondary)', color:'white', border:'none', borderRadius:'4px', fontSize:'0.7rem', padding: '5px'}} title="Ajouter une analyse">+ Ajouter</button></div>
-                  {typesAnalysesList.map((item, i) => (<div key={i} style={{marginBottom: '5px', display: 'flex', gap: '5px'}}><select className="form-input" value={item.selection} onChange={e => modifierType(i, 'selection', e.target.value)}>{LISTE_ANALYSES.map(t => <option key={t} value={t}>{t}</option>)}</select>{item.selection === 'Autre' && <input className="form-input" placeholder="Préciser..." value={item.custom} onChange={e => modifierType(i, 'custom', e.target.value)} />}<button type="button" className="no-print" onClick={() => supprimerType(i)} style={{color: '#ef4444', background: 'transparent', border:'none'}} title="Retirer cette ligne">✕</button></div>))}
+                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}><h3 style={{margin:0, fontSize:'0.9rem', color: '#94a3b8'}}>EXAMENS</h3><button type="button" className="no-print" onClick={ajouterType} style={{background: 'var(--secondary)', color:'white', border:'none', borderRadius:'4px', fontSize:'0.7rem', padding: '5px'}}>+ Ajouter</button></div>
+                  {typesAnalysesList.map((item, i) => (<div key={i} style={{marginBottom: '5px', display: 'flex', gap: '5px'}}><select className="form-input" value={item.selection} onChange={e => modifierType(i, 'selection', e.target.value)}>{LISTE_ANALYSES.map(t => <option key={t} value={t}>{t}</option>)}</select>{item.selection === 'Autre' && <input className="form-input" placeholder="Préciser..." value={item.custom} onChange={e => modifierType(i, 'custom', e.target.value)} />}<button type="button" className="no-print" onClick={() => supprimerType(i)} style={{color: '#ef4444', background: 'transparent', border:'none'}}>✕</button></div>))}
                 </div>
+
                 {(userRole === 'Biologiste' || currentBilan.statut === 'termine') && (
                   <div style={{background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '10px'}}>
-                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}><h3 style={{margin:0, fontSize:'0.9rem', color: '#94a3b8'}}>RESULTATS</h3><button type="button" className="no-print" onClick={ajouterParametre} style={{background: 'var(--primary)', border: 'none', borderRadius: '50%', width: '25px', height: '25px', cursor: 'pointer'}} title="Ajouter un paramètre (Glycémie, etc)">+</button></div>
+                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}><h3 style={{margin:0, fontSize:'0.9rem', color: '#94a3b8'}}>RESULTATS</h3><button type="button" className="no-print" onClick={ajouterParametre} style={{background: 'var(--primary)', border: 'none', borderRadius: '50%', width: '25px', height: '25px', cursor: 'pointer'}}>+</button></div>
                     <div style={{display: 'flex', gap: '10px', fontSize: '0.7rem', color: '#94a3b8', paddingLeft: '5px', marginBottom: '5px'}}><div style={{flex: 2}}>PARAMÈTRE</div><div style={{flex: 1, textAlign: 'center'}}>RÉSULTAT</div><div style={{flex: 1, textAlign: 'center'}}>UNITÉ</div><div style={{flex: 1, textAlign: 'center'}}>NORME MIN-MAX</div><div style={{width: '20px'}}></div></div>
                     {parametres.map((param, i) => {
                       const isAlert = checkNorme(param.valeur, param.min, param.max)
-                      return <div key={i} style={{display: 'flex', gap: '10px', marginBottom: '5px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '5px'}}><input className="form-input" style={{flex: 2}} placeholder="Nom" value={param.nom} onChange={(e) => modifierParametre(i, 'nom', e.target.value)}/><input className="form-input" style={{flex: 1, textAlign: 'center', fontWeight: 'bold', color: isAlert ? '#ef4444' : 'inherit', borderColor: isAlert ? '#ef4444' : '#334155'}} placeholder="Val" value={param.valeur} onChange={(e) => modifierParametre(i, 'valeur', e.target.value)}/><input className="form-input" style={{flex: 1, textAlign: 'center'}} placeholder="Unité" value={param.unite} onChange={(e) => modifierParametre(i, 'unite', e.target.value)}/><div style={{flex: 1, display: 'flex', gap: '5px'}}><input className="form-input" style={{textAlign: 'center', fontSize: '0.8rem'}} placeholder="Min" value={param.min} onChange={(e) => modifierParametre(i, 'min', e.target.value)}/><input className="form-input" style={{textAlign: 'center', fontSize: '0.8rem'}} placeholder="Max" value={param.max} onChange={(e) => modifierParametre(i, 'max', e.target.value)}/></div><button type="button" className="no-print" onClick={() => supprimerParametre(i)} style={{background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer'}} title="Retirer la ligne">✕</button></div>
+                      return <div key={i} style={{display: 'flex', gap: '10px', marginBottom: '5px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '5px'}}><input className="form-input" style={{flex: 2}} placeholder="Nom" value={param.nom} onChange={(e) => modifierParametre(i, 'nom', e.target.value)}/><input className="form-input" style={{flex: 1, textAlign: 'center', fontWeight: 'bold', color: isAlert ? '#ef4444' : 'inherit', borderColor: isAlert ? '#ef4444' : '#334155'}} placeholder="Val" value={param.valeur} onChange={(e) => modifierParametre(i, 'valeur', e.target.value)}/><input className="form-input" style={{flex: 1, textAlign: 'center'}} placeholder="Unité" value={param.unite} onChange={(e) => modifierParametre(i, 'unite', e.target.value)}/><div style={{flex: 1, display: 'flex', gap: '5px'}}><input className="form-input" style={{textAlign: 'center', fontSize: '0.8rem'}} placeholder="Min" value={param.min} onChange={(e) => modifierParametre(i, 'min', e.target.value)}/><input className="form-input" style={{textAlign: 'center', fontSize: '0.8rem'}} placeholder="Max" value={param.max} onChange={(e) => modifierParametre(i, 'max', e.target.value)}/></div><button type="button" className="no-print" onClick={() => supprimerParametre(i)} style={{background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer'}}>✕</button></div>
                     })}
                   </div>
                 )}
-                <div style={{background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '10px'}}>
-                  <label>Statut</label>
-                  <select className="form-input" disabled={userRole === 'Reception'} value={currentBilan.statut} onChange={e => setCurrentBilan({...currentBilan, statut: e.target.value})}><option value="en_attente">En Attente</option><option value="en_cours">En Cours</option><option value="termine">Terminé & Validé</option></select>
+                
+                {/* ZONE STATUT & SMS */}
+                <div style={{display:'flex', gap:'20px'}}>
+                  <div style={{flex:1, background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '10px'}}>
+                    <label>Statut</label>
+                    <select className="form-input" disabled={userRole === 'Reception'} value={currentBilan.statut} onChange={e => setCurrentBilan({...currentBilan, statut: e.target.value})}><option value="en_attente">En Attente</option><option value="en_cours">En Cours</option><option value="termine">Terminé & Validé</option></select>
+                  </div>
+                  {currentBilan.statut === 'termine' && (
+                    <div style={{flex:1, background: 'rgba(16, 185, 129, 0.1)', padding: '15px', borderRadius: '10px', border:'1px solid rgba(16, 185, 129, 0.3)', display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center'}}>
+                      <button type="button" id="btn-sms" onClick={handleSendSMS} className="btn-action" style={{background:'#10b981', color:'white', fontSize:'0.9rem', padding:'10px 20px', border:'none', cursor:'pointer'}}>📲 Envoyer SMS</button>
+                      {currentBilan.sms_envoye && <span style={{fontSize:'0.7rem', color:'#10b981', marginTop:'5px'}}>Déjà envoyé ✅</span>}
+                    </div>
+                  )}
                 </div>
-                <div className="no-print" style={{display: 'flex', justifyContent: 'flex-end', gap: '10px'}}><button type="button" className="btn btn-edit" onClick={() => setIsModalOpen(false)}>Fermer</button><button type="submit" className="btn btn-primary" title="Enregistrer les modifications">Sauvegarder</button></div>
+
+                <div className="no-print" style={{display: 'flex', justifyContent: 'flex-end', gap: '10px'}}><button type="button" className="btn btn-edit" onClick={() => setIsModalOpen(false)}>Fermer</button><button type="submit" className="btn btn-primary">Sauvegarder</button></div>
+                
+                {/* ZONE AUDIT LOGS (Visible pour Biologiste) */}
+                {userRole === 'Biologiste' && logs.length > 0 && (
+                  <div className="no-print" style={{marginTop:'20px', borderTop:'1px solid rgba(255,255,255,0.1)', paddingTop:'10px'}}>
+                    <h4 style={{margin:'0 0 10px 0', color:'#64748b', fontSize:'0.8rem'}}>HISTORIQUE DES ACTIONS (Traçabilité)</h4>
+                    <div style={{maxHeight:'100px', overflowY:'auto'}}>
+                      {logs.map(log => (
+                        <div key={log.id} style={{fontSize:'0.75rem', color:'#94a3b8', marginBottom:'4px'}}>
+                          <span style={{color:'var(--primary)'}}>{new Date(log.created_at).toLocaleString()}</span> - <strong>{log.user_email}</strong> : {log.action} ({log.details})
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </form>
               <div className="print-footer"><p>Fait à Alger. Document signé électroniquement.</p></div>
             </div>
