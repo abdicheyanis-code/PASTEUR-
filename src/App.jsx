@@ -1,3 +1,4 @@
+import logoPasteur from './logo.png'
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import QRCode from 'react-qr-code'
