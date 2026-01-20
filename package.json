@@ -8,11 +8,12 @@
     "build": "vite build",
     "preview": "vite preview"
   },
-  "dependencies": {
+    "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "@supabase/supabase-js": "^2.39.0",
-    "react-qr-code": "^2.0.12"
+    "react-qr-code": "^2.0.12",
+    "react-barcode": "^1.4.6"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",
