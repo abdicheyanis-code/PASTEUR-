@@ -12,8 +12,8 @@ function App() {
   
   // UX States
   const [searchTerm, setSearchTerm] = useState('')
-  const [activeTab, setActiveTab] = useState('all') // 'all', 'en_attente', 'en_cours', 'termine'
-  const [toast, setToast] = useState(null) // { message, type }
+  const [activeTab, setActiveTab] = useState('all')
+  const [toast, setToast] = useState(null)
   
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [currentBilan, setCurrentBilan] = useState(null)
@@ -27,7 +27,6 @@ function App() {
   const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_pasteur_algerie_logo.jpg/600px-Institut_pasteur_algerie_logo.jpg"
   const LISTE_ANALYSES = ["FNS Completo", "PCR Covid-19", "Biochimie", "Bilan Lipidique", "Sérologie", "Hormonologie", "Autre"]
 
-  // --- NOTIFICATIONS (TOAST) ---
   const showToast = (message, type = 'success') => {
     setToast({ message, type })
     setTimeout(() => setToast(null), 3000)
@@ -36,11 +35,8 @@ function App() {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const bilanId = urlParams.get('id');
-    if (bilanId) {
-      fetchPublicBilan(bilanId)
-    } else {
-      checkUserSession()
-    }
+    if (bilanId) fetchPublicBilan(bilanId)
+    else checkUserSession()
   }, [])
 
   async function checkUserSession() {
@@ -51,7 +47,6 @@ function App() {
       setUserRole(employe?.poste || 'Biologiste')
       fetchData()
     }
-    
     supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null)
       if (session?.user) fetchData()
@@ -75,15 +70,12 @@ function App() {
     setLoading(false)
   }
 
-  // Logique métier
   const ajouterType = () => setTypesAnalysesList([...typesAnalysesList, { selection: 'FNS Completo', custom: '' }])
   const supprimerType = (i) => { const l = [...typesAnalysesList]; if(l.length > 1) { l.splice(i, 1); setTypesAnalysesList(l); } }
   const modifierType = (i, f, v) => { const l = [...typesAnalysesList]; l[i][f] = v; setTypesAnalysesList(l); }
-  
   const ajouterParametre = () => setParametres([...parametres, { nom: '', valeur: '', unite: '', min: '', max: '' }])
   const supprimerParametre = (i) => { const n = [...parametres]; n.splice(i, 1); setParametres(n); }
   const modifierParametre = (i, champ, val) => { const n = [...parametres]; n[i][champ] = val; setParametres(n); }
-  
   const checkNorme = (val, min, max) => {
     if (!val || !min || !max) return false;
     const v = parseFloat(val.replace(',', '.')), mi = parseFloat(min), ma = parseFloat(max);
@@ -91,7 +83,32 @@ function App() {
     return (v < mi || v > ma);
   }
 
-  // --- ACTIONS ---
+  // --- NOUVEAU : FONCTION EXPORT EXCEL ---
+  const handleExportExcel = () => {
+    // 1. On prépare les données
+    const headers = ["ID Dossier;Date;Nom;Prénom;Age;Analyses;Statut"];
+    const rows = bilans.map(b => {
+      const date = new Date(b.created_at).toLocaleDateString();
+      // On nettoie les textes pour éviter les bugs CSV (point-virgule interdit)
+      const analyses = b.type_analyse.replace(/;/g, ","); 
+      return `${b.id};${date};${b.nom_patient};${b.prenom_patient};${b.age_patient};${analyses};${b.statut}`;
+    });
+
+    // 2. On crée le fichier CSV
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers, ...rows].join("\n");
+    
+    // 3. On déclenche le téléchargement
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `pasteur_export_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast("Fichier Excel téléchargé !");
+  }
+
   const openNewBilan = () => {
     setCurrentBilan({ nom_patient: '', prenom_patient: '', age_patient: '', statut: 'en_attente' })
     setTypesAnalysesList([{ selection: 'FNS Completo', custom: '' }])
@@ -105,12 +122,7 @@ function App() {
       const parties = bilan.type_analyse.split(' + ')
       setTypesAnalysesList(parties.map(p => LISTE_ANALYSES.includes(p) ? {selection: p, custom: ''} : {selection: 'Autre', custom: p}))
     } else { setTypesAnalysesList([{ selection: 'FNS Completo', custom: '' }]) }
-    
-    try { 
-      if (bilan.resultat_analyse && bilan.resultat_analyse.startsWith('[')) setParametres(JSON.parse(bilan.resultat_analyse)); 
-      else setParametres([]) 
-    } catch { setParametres([]) }
-    
+    try { if (bilan.resultat_analyse && bilan.resultat_analyse.startsWith('[')) setParametres(JSON.parse(bilan.resultat_analyse)); else setParametres([]) } catch { setParametres([]) }
     setIsModalOpen(true)
   }
 
@@ -145,14 +157,13 @@ function App() {
     if (error) showToast(error.message, "error")
   }
 
-  // --- FILTRAGE INTELLIGENT ---
   const filteredBilans = bilans.filter(b => {
     const matchesSearch = b.nom_patient.toLowerCase().includes(searchTerm.toLowerCase()) || b.id.includes(searchTerm)
     const matchesTab = activeTab === 'all' ? true : b.statut === activeTab
     return matchesSearch && matchesTab
   })
 
-  // VUE PATIENT
+  // VUE PATIENT (Identique)
   if (patientViewBilan) {
     return (
       <div style={{background: 'white', minHeight: '100vh', color: 'black', padding: '20px', fontFamily: 'Arial'}}>
@@ -179,7 +190,7 @@ function App() {
     )
   }
 
-  // VUE LOGIN
+  // VUE LOGIN (Identique)
   if (!user) {
     return (
       <>
@@ -194,14 +205,7 @@ function App() {
     <>
       <div className="bio-background"><ul className="bacteria-list">{[...Array(10)].map((_,i)=><li key={i} className="bacteria"></li>)}</ul></div>
       
-      {toast && (
-        <div className="toast-container">
-          <div className={`toast ${toast.type === 'error' ? 'error' : ''}`}>
-            <span>{toast.type === 'error' ? '❌' : '✅'}</span>
-            {toast.message}
-          </div>
-        </div>
-      )}
+      {toast && <div className="toast-container"><div className={`toast ${toast.type === 'error' ? 'error' : ''}`}><span>{toast.type === 'error' ? '❌' : '✅'}</span>{toast.message}</div></div>}
 
       <div className="container">
         <nav className="navbar">
@@ -221,11 +225,12 @@ function App() {
         )}
 
         <div style={{display: 'flex', gap: '20px', marginBottom: '20px', alignItems: 'center'}}>
-          <input type="text" className="search-input" placeholder="🔍 Rechercher (Nom, ID)..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          <input type="text" className="search-input" placeholder="🔍 Rechercher..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           <button className="btn btn-primary" style={{whiteSpace: 'nowrap', height: '50px'}} onClick={openNewBilan}>+ Nouveau Dossier</button>
+          {/* BOUTON EXPORT EXCEL */}
+          <button className="btn" style={{whiteSpace: 'nowrap', height: '50px', background: '#10b981', color: 'white'}} onClick={handleExportExcel}>📊 Export Excel</button>
         </div>
 
-        {/* ONGLETS DE FILTRE */}
         <div className="tabs-container">
           <button className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>Tous</button>
           <button className={`tab-btn ${activeTab === 'en_attente' ? 'active' : ''}`} onClick={() => setActiveTab('en_attente')}>⏳ En Attente</button>
@@ -238,14 +243,7 @@ function App() {
             <thead><tr><th>Patient</th><th>Analyses</th><th>Statut</th><th style={{textAlign: 'right'}}>Actions</th></tr></thead>
             <tbody>
               {filteredBilans.length === 0 ? (
-                <tr>
-                  <td colSpan="4">
-                    <div className="empty-state">
-                      <span className="empty-icon">📂</span>
-                      <p>Aucun dossier ne correspond à votre recherche.</p>
-                    </div>
-                  </td>
-                </tr>
+                <tr><td colSpan="4"><div className="empty-state"><span className="empty-icon">📂</span><p>Aucun dossier trouvé.</p></div></td></tr>
               ) : (
                 filteredBilans.map((b) => (
                   <tr key={b.id}>
@@ -266,14 +264,12 @@ function App() {
         {isModalOpen && (
           <div className="modal-overlay" onClick={() => setIsModalOpen(false)} style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100}}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{padding: '30px', borderRadius: '20px', width: '90%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto', background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', color: 'white'}}>
-              
                <div className="print-header" style={{textAlign: 'center', marginBottom: '20px'}}>
                 <img src={LOGO_URL} alt="Logo" style={{height: '80px'}} />
                 <h1>INSTITUT PASTEUR D'ALGÉRIE</h1>
                 <p>Laboratoire d'Analyses Médicales</p>
                 <hr style={{borderColor: '#000'}}/>
               </div>
-
               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: '20px'}}>
                 <h2 style={{margin:0, color: 'var(--primary)'}}>DOSSIER MÉDICAL</h2>
                 <div className="no-print">
@@ -281,7 +277,6 @@ function App() {
                    <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-danger">X</button>
                 </div>
               </div>
-              
               <form onSubmit={handleSave} style={{display: 'flex', flexDirection: 'column', gap: '20px'}}>
                 <div style={{display: 'flex', gap: '20px'}}>
                   <div style={{flex: 1, background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '10px'}}>
@@ -294,12 +289,10 @@ function App() {
                   </div>
                   {currentBilan.id && <div style={{background: 'white', padding: '10px', borderRadius: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'}}><QRCode value={`${window.location.origin}?id=${currentBilan.id}`} size={100} /><p style={{color: 'black', fontSize: '0.6rem', marginTop: '5px', textAlign: 'center'}}>Scannez pour<br/>résultats</p></div>}
                 </div>
-
                 <div style={{background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '10px'}}>
                   <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}><h3 style={{margin:0, fontSize:'0.9rem', color: '#94a3b8'}}>EXAMENS</h3><button type="button" className="no-print" onClick={ajouterType} style={{background: 'var(--secondary)', color:'white', border:'none', borderRadius:'4px', fontSize:'0.7rem', padding: '5px'}}>+ Ajouter</button></div>
                   {typesAnalysesList.map((item, i) => (<div key={i} style={{marginBottom: '5px', display: 'flex', gap: '5px'}}><select className="form-input" value={item.selection} onChange={e => modifierType(i, 'selection', e.target.value)}>{LISTE_ANALYSES.map(t => <option key={t} value={t}>{t}</option>)}</select>{item.selection === 'Autre' && <input className="form-input" placeholder="Préciser..." value={item.custom} onChange={e => modifierType(i, 'custom', e.target.value)} />}<button type="button" className="no-print" onClick={() => supprimerType(i)} style={{color: '#ef4444', background: 'transparent', border:'none'}}>✕</button></div>))}
                 </div>
-
                 {(userRole === 'Biologiste' || currentBilan.statut === 'termine') && (
                   <div style={{background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '10px'}}>
                     <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}><h3 style={{margin:0, fontSize:'0.9rem', color: '#94a3b8'}}>RESULTATS</h3><button type="button" className="no-print" onClick={ajouterParametre} style={{background: 'var(--primary)', border: 'none', borderRadius: '50%', width: '25px', height: '25px', cursor: 'pointer'}}>+</button></div>
@@ -310,12 +303,10 @@ function App() {
                     })}
                   </div>
                 )}
-
                 <div style={{background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '10px'}}>
                   <label>Statut</label>
                   <select className="form-input" disabled={userRole === 'Reception'} value={currentBilan.statut} onChange={e => setCurrentBilan({...currentBilan, statut: e.target.value})}><option value="en_attente">En Attente</option><option value="en_cours">En Cours</option><option value="termine">Terminé & Validé</option></select>
                 </div>
-
                 <div className="no-print" style={{display: 'flex', justifyContent: 'flex-end', gap: '10px'}}><button type="button" className="btn btn-edit" onClick={() => setIsModalOpen(false)}>Fermer</button><button type="submit" className="btn btn-primary">Sauvegarder</button></div>
               </form>
               <div className="print-footer"><p>Fait à Alger. Document signé électroniquement.</p></div>
@@ -328,8 +319,3 @@ function App() {
 }
 
 export default App
-
-
-
-
-
