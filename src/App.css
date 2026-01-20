@@ -178,3 +178,26 @@ tr:hover td { background: rgba(255,255,255,0.03); color: white; }
   color: #64748b;
 }
 .empty-icon { font-size: 3rem; margin-bottom: 10px; opacity: 0.5; display: block; }
+/* --- BOUTON REFRESH --- */
+.btn-refresh {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  transition: all 0.4s ease;
+  margin-right: 10px;
+}
+
+.btn-refresh:hover {
+  background: var(--primary);
+  color: #0f172a;
+  transform: rotate(180deg); /* Ça tourne ! */
+  box-shadow: 0 0 15px var(--primary);
+}
