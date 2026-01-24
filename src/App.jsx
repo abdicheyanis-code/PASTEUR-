@@ -27,7 +27,7 @@ function App() {
   const [patientViewBilan, setPatientViewBilan] = useState(null)
 
   // Lien direct Internet (Solution Joker qui marche à 100%)
- const LOGO_URL = "/logo_pasteur"
+const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_pasteur_algerie_logo.jpg/600px-Institut_pasteur_algerie_logo.jpg"
   
   const LISTE_ANALYSES = ["FNS Completo", "PCR Covid-19", "Biochimie", "Bilan Lipidique", "Sérologie", "Hormonologie", "Autre"]
 
