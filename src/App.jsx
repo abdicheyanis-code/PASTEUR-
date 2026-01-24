@@ -5,11 +5,12 @@ import Barcode from 'react-barcode'
 import './App.css'
 
 function App() {
+  // ... (Le reste du code reste le même, mais je te redonne le début propre) ...
   const [bilans, setBilans] = useState([])
   const [stats, setStats] = useState(null)
   const [user, setUser] = useState(null)
   const [userRole, setUserRole] = useState('Reception')
-  const [loading, setLoading] = useState(false) // Sert pour le chargement global ET les boutons
+  const [loading, setLoading] = useState(false)
   
   // UX States
   const [searchTerm, setSearchTerm] = useState('')
@@ -26,11 +27,15 @@ function App() {
   const [password, setPassword] = useState('')
   const [patientViewBilan, setPatientViewBilan] = useState(null)
 
-  // Lien direct Internet (Solution Joker qui marche à 100%)
-const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_pasteur_algerie_logo.jpg/600px-Institut_pasteur_algerie_logo.jpg"
+  // LE LIEN INTERNET DIRECT (C'est ça qui va marcher)
+  const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_pasteur_algerie_logo.jpg/600px-Institut_pasteur_algerie_logo.jpg"
   
   const LISTE_ANALYSES = ["FNS Completo", "PCR Covid-19", "Biochimie", "Bilan Lipidique", "Sérologie", "Hormonologie", "Autre"]
 
+  // ... (Copie la suite de tes fonctions ici, ou garde celles d'avant, l'important c'est le haut du fichier) ...
+  
+  // Pour être sûr, je te remets tout le bloc jusqu'à la fin pour éviter les erreurs de copier/coller :
+  
   const showToast = (message, type = 'success') => {
     setToast({ message, type })
     setTimeout(() => setToast(null), 3000)
@@ -73,19 +78,11 @@ const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_
     setLoading(true)
     const { data: statsData } = await supabase.from('stats_labo').select('*').single()
     setStats(statsData)
-    
-    // OPTIMISATION : On charge seulement les 50 derniers pour la rapidité
-    const { data: bilansData } = await supabase
-      .from('bilans')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(50) 
-      
+    const { data: bilansData } = await supabase.from('bilans').select('*').order('created_at', { ascending: false }).limit(50) 
     setBilans(bilansData || [])
     setLoading(false)
   }
 
-  // Fonctions Audit
   const logAction = async (action, details, bilanId) => {
     if (!bilanId) return
     await supabase.from('audit_logs').insert([{ user_email: user.email, action: action, details: details, bilan_id: bilanId }])
@@ -95,7 +92,6 @@ const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_
     setLogs(data || [])
   }
 
-  // Logique métier
   const ajouterType = () => setTypesAnalysesList([...typesAnalysesList, { selection: 'FNS Completo', custom: '' }])
   const supprimerType = (i) => { const l = [...typesAnalysesList]; if(l.length > 1) { l.splice(i, 1); setTypesAnalysesList(l); } }
   const modifierType = (i, f, v) => { const l = [...typesAnalysesList]; l[i][f] = v; setTypesAnalysesList(l); }
@@ -128,29 +124,17 @@ const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_
   }
 
   const handleSendSMS = async () => {
-    // Vérification du numéro
     if (!currentBilan.telephone) return showToast("Numéro de téléphone manquant !", "error");
-    
-    // Nettoyage du numéro (Pour l'Algérie)
-    // On enlève les espaces et le premier 0, et on ajoute 213
-    let cleanTel = currentBilan.telephone.replace(/\s/g, ''); // Enlève les espaces
-    if (cleanTel.startsWith('0')) cleanTel = cleanTel.substring(1); // Enlève le 0
-    if (!cleanTel.startsWith('213')) cleanTel = '213' + cleanTel; // Ajoute l'indicatif
-
+    let cleanTel = currentBilan.telephone.replace(/\s/g, ''); 
+    if (cleanTel.startsWith('0')) cleanTel = cleanTel.substring(1); 
+    if (!cleanTel.startsWith('213')) cleanTel = '213' + cleanTel; 
     const btn = document.getElementById('btn-sms');
     if(btn) btn.innerText = "Ouverture WhatsApp...";
-    
-    // Le message
     const message = `Bonjour ${currentBilan.nom_patient}, Institut Pasteur : Vos analyses sont prêtes. Veuillez passer les récupérer muni de votre pièce d'identité.`;
-    
-    // Mise à jour Base de données (pour dire qu'on a fait l'action)
     await supabase.from('bilans').update({ sms_envoye: true }).eq('id', currentBilan.id);
     setCurrentBilan({ ...currentBilan, sms_envoye: true });
     await logAction("WhatsApp", `Message envoyé au +${cleanTel}`, currentBilan.id);
-    
-    // OUVERTURE DE WHATSAPP
     window.open(`https://wa.me/${cleanTel}?text=${encodeURIComponent(message)}`, '_blank');
-    
     fetchLogs(currentBilan.id); 
     if(btn) btn.innerText = "📲 Envoyer WhatsApp";
   }
@@ -187,15 +171,13 @@ const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_
 
   const handleSave = async (e) => {
     e.preventDefault()
-    setLoading(true) // Indicateur visuel
-    
+    setLoading(true) 
     const typesStr = typesAnalysesList.map(t => t.selection === 'Autre' ? t.custom : t.selection).join(' + ')
     const dataToSave = {
       nom_patient: currentBilan.nom_patient, prenom_patient: currentBilan.prenom_patient, age_patient: currentBilan.age_patient, telephone: currentBilan.telephone,
       type_analyse: typesStr, statut: currentBilan.statut, resultat_analyse: JSON.stringify(parametres),
       date_fin_analyse: currentBilan.statut === 'termine' ? new Date() : null
     }
-
     let bilanId = currentBilan.id;
     if (currentBilan.id) {
       await supabase.from('bilans').update(dataToSave).eq('id', currentBilan.id)
@@ -205,7 +187,6 @@ const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_
       bilanId = data.id; 
       await logAction("Création", `Création du dossier`, bilanId)
     }
-    
     setLoading(false)
     setIsModalOpen(false)
     showToast("Dossier enregistré.")
@@ -225,11 +206,7 @@ const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_
     e.preventDefault()
     setLoading(true)
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
-        showToast(error.message, "error")
-        setLoading(false)
-    }
-    // Si succès, le useEffect se déclenche tout seul
+    if (error) { showToast(error.message, "error"); setLoading(false); }
   }
 
   const filteredBilans = bilans.filter(b => {
@@ -291,9 +268,7 @@ const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_
   return (
     <>
       <div className="bio-background"><ul className="bacteria-list">{[...Array(10)].map((_,i)=><li key={i} className="bacteria"></li>)}</ul></div>
-      
       {toast && <div className="toast-container"><div className={`toast ${toast.type === 'error' ? 'error' : ''}`}><span>{toast.type === 'error' ? '❌' : '✅'}</span>{toast.message}</div></div>}
-
       <div className="container">
         <nav className="navbar">
           <div className="logo"><h1>Pasteur<span>Algérie</span></h1></div>
@@ -303,7 +278,6 @@ const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_
             <button className="btn btn-edit" onClick={() => supabase.auth.signOut()}>Déconnexion</button>
           </div>
         </nav>
-
         {stats && (
           <div className="stats-grid">
             <div className="stat-card" style={{'--color-glow': '#38bdf8'}}><h3>En Attente</h3><p className="value">{stats.dossiers_en_attente}</p></div>
@@ -311,20 +285,17 @@ const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_
             <div className="stat-card" style={{'--color-glow': '#4ade80'}}><h3>Terminés</h3><p className="value">{stats.dossiers_termines}</p></div>
           </div>
         )}
-
         <div style={{display: 'flex', gap: '20px', marginBottom: '20px', alignItems: 'center'}}>
           <input type="text" className="search-input" placeholder="🔍 Rechercher (Nom, ID)..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           <button className="btn btn-primary" style={{whiteSpace: 'nowrap', height: '50px'}} onClick={openNewBilan}>+ Nouveau Dossier</button>
           <button className="btn" style={{whiteSpace: 'nowrap', height: '50px', background: '#10b981', color: 'white'}} onClick={handleExportExcel}>📊 Export Excel</button>
         </div>
-
         <div className="tabs-container">
           <button className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`} onClick={() => setActiveTab('all')}>Tous</button>
           <button className={`tab-btn ${activeTab === 'en_attente' ? 'active' : ''}`} onClick={() => setActiveTab('en_attente')}>⏳ En Attente</button>
           <button className={`tab-btn ${activeTab === 'en_cours' ? 'active' : ''}`} onClick={() => setActiveTab('en_cours')}>⚙️ En Cours</button>
           <button className={`tab-btn ${activeTab === 'termine' ? 'active' : ''}`} onClick={() => setActiveTab('termine')}>✅ Terminés</button>
         </div>
-
         <div className="table-container">
           <table>
             <thead><tr><th>Patient</th><th>Analyses</th><th>Statut</th><th style={{textAlign: 'right'}}>Actions</th></tr></thead>
@@ -347,7 +318,6 @@ const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_
             </tbody>
           </table>
         </div>
-
         {isModalOpen && (
           <div className="modal-overlay" onClick={() => setIsModalOpen(false)} style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100}}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{padding: '30px', borderRadius: '20px', width: '90%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto', background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', color: 'white'}}>
@@ -398,7 +368,7 @@ const LOGO_URL = "https://upload.wikimedia.org/wikipedia/fr/thumb/3/37/Institut_
                     <label>Statut</label>
                     <select className="form-input" disabled={userRole === 'Reception'} value={currentBilan.statut} onChange={e => setCurrentBilan({...currentBilan, statut: e.target.value})}><option value="en_attente">En Attente</option><option value="en_cours">En Cours</option><option value="termine">Terminé & Validé</option></select>
                   </div>
-                  {currentBilan.statut === 'termine' && <div style={{flex:1, background: 'rgba(16, 185, 129, 0.1)', padding: '15px', borderRadius: '10px', border:'1px solid rgba(16, 185, 129, 0.3)', display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center'}}><button type="button" id="btn-sms" onClick={handleSendSMS} className="btn-action" style={{background:'#10b981', color:'white', fontSize:'0.9rem', padding:'10px 20px', border:'none', cursor:'pointer'}}>📲 Envoyer SMS</button>{currentBilan.sms_envoye && <span style={{fontSize:'0.7rem', color:'#10b981', marginTop:'5px'}}>Déjà envoyé ✅</span>}</div>}
+                  {currentBilan.statut === 'termine' && <div style={{flex:1, background: 'rgba(16, 185, 129, 0.1)', padding: '15px', borderRadius: '10px', border:'1px solid rgba(16, 185, 129, 0.3)', display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center'}}><button type="button" id="btn-sms" onClick={handleSendSMS} className="btn-action" style={{background:'#10b981', color:'white', fontSize:'0.9rem', padding:'10px 20px', border:'none', cursor:'pointer'}}>📲 Envoyer WhatsApp</button>{currentBilan.sms_envoye && <span style={{fontSize:'0.7rem', color:'#10b981', marginTop:'5px'}}>Déjà envoyé ✅</span>}</div>}
                 </div>
                 <div className="no-print" style={{display: 'flex', justifyContent: 'flex-end', gap: '10px'}}><button type="button" className="btn btn-edit" onClick={() => setIsModalOpen(false)}>Fermer</button><button type="submit" className="btn btn-primary" disabled={loading}>{loading ? 'Sauvegarde...' : 'Sauvegarder'}</button></div>
                 {userRole === 'Biologiste' && logs.length > 0 && <div className="no-print" style={{marginTop:'20px', borderTop:'1px solid rgba(255,255,255,0.1)', paddingTop:'10px'}}><h4 style={{margin:'0 0 10px 0', color:'#64748b', fontSize:'0.8rem'}}>HISTORIQUE DES ACTIONS (Traçabilité)</h4><div style={{maxHeight:'100px', overflowY:'auto'}}>{logs.map(log => (<div key={log.id} style={{fontSize:'0.75rem', color:'#94a3b8', marginBottom:'4px'}}><span style={{color:'var(--primary)'}}>{new Date(log.created_at).toLocaleString()}</span> - <strong>{log.user_email}</strong> : {log.action} ({log.details})</div>))}</div></div>}
